@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  experimental: {
+    outputFileTracing: true,
+  },
   reactStrictMode: true,
   
   // Configure environment variables

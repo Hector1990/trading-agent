@@ -1,35 +1,32 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Providers } from './providers'
-import { Navbar } from '@/components/Navbar'
-import { Toaster } from 'sonner'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { AppShell } from "@/layouts/AppShell";
+import { ThemeProvider } from "./theme-provider";
+import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'TradingAgents - 智能交易分析平台',
-  description: '基于AI的股票市场分析和交易决策系统',
-}
+  title: "Trading Agents - Web UI",
+  description: "Advanced trading analysis platform",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-background">
-            <Navbar />
-            <main className="container mx-auto px-4 py-8">
+        <ThemeProvider>
+          <Providers>
+            <AppShell>
               {children}
-            </main>
-          </div>
-          <Toaster richColors position="top-right" />
-        </Providers>
+            </AppShell>
+          </Providers>
+        </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

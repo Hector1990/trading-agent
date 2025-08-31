@@ -5,7 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { LogStream } from '@/components/LogStream'
+import { LogStreamModule } from '@/modules/logstream/LogStreamModule'
 import { ReportViewer } from '@/components/ReportViewer'
 import { TradingAgentsAPI } from '@/lib/api'
 import { toast } from 'sonner'
@@ -166,7 +166,7 @@ export default function RunDetailPage() {
 
       {/* Live Logs */}
       {status?.status === 'running' && (
-        <LogStream runId={runId} />
+        <LogStreamModule runId={runId} />
       )}
 
       {/* Report */}
