@@ -391,8 +391,17 @@ def update_display(layout, spinner_text=None):
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
-    """Get all user selections before starting the analysis display."""
+def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
+    """Get all user selections before starting the analysis display.
+    
+    Args:
+        llm_provider: Optional provider name to skip provider selection
+        quick_model: Optional quick thinking model to skip model selection
+        deep_model: Optional deep thinking model to skip model selection
+    
+    Returns:
+        Dictionary of user selections
+    """
     # Display ASCII art welcome message
     with open("./cli/static/welcome.txt", "r") as f:
         welcome_ascii = f.read()
@@ -463,29 +472,61 @@ def get_user_selections():
     )
     selected_research_depth = select_research_depth()
 
-    # Step 5: OpenAI backend
+    # Step 5: LLM Backend Selection
     console.print(
         create_question_box(
-            "Step 5: OpenAI backend", "Select which service to talk to"
+            "Step 5: LLM Backend", "Select which LLM service to use"
         )
     )
-    selected_llm_provider, backend_url = select_llm_provider()
+    # Get LLM provider and models - use CLI options if provided
+    if llm_provider:
+        provider_key = llm_provider.lower()
+        # Map provider name to backend URL
+        backend_urls = {
+            "deepseek": "https://api.deepseek.com",
+            "openai": "https://api.openai.com/v1",
+            "anthropic": "https://api.anthropic.com/",
+            "google": "https://generativelanguage.googleapis.com/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "ollama": "http://localhost:11434/v1"
+        }
+        backend_url = backend_urls.get(provider_key, "https://api.deepseek.com")
+        provider_name = llm_provider.title()
+    else:
+        provider_name, backend_url = select_llm_provider()
+        provider_key = provider_name.lower()
     
+    # Set model selection based on provider
+    if quick_model:
+        quick_think_llm = quick_model
+    elif provider_key in ["deepseek", "openai", "anthropic", "google", "openrouter", "ollama"]:
+        quick_think_llm = select_shallow_thinking_agent(provider_key)
+    else:
+        # Default to DeepSeek models if provider is not recognized
+        quick_think_llm = "deepseek-chat"
+    
+    if deep_model:
+        deep_think_llm = deep_model
+    elif provider_key in ["deepseek", "openai", "anthropic", "google", "openrouter", "ollama"]:
+        deep_think_llm = select_deep_thinking_agent(provider_key)
+    else:
+        deep_think_llm = "deepseek-reasoner"
+
     # Step 6: Thinking agents
     console.print(
         create_question_box(
             "Step 6: Thinking Agents", "Select your thinking agents for analysis"
         )
     )
-    selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
-    selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
+    selected_shallow_thinker = quick_think_llm
+    selected_deep_thinker = deep_think_llm
 
     return {
         "ticker": selected_ticker,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
-        "llm_provider": selected_llm_provider.lower(),
+        "llm_provider": provider_key,
         "backend_url": backend_url,
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
@@ -731,9 +772,13 @@ def extract_content_string(content):
     else:
         return str(content)
 
-def run_analysis():
-    # First get all user selections
-    selections = get_user_selections()
+def run_analysis(llm_provider=None, quick_model=None, deep_model=None):
+    # First get all user selections, passing through any model/provider overrides
+    selections = get_user_selections(
+        llm_provider=llm_provider,
+        quick_model=quick_model,
+        deep_model=deep_model
+    )
 
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
@@ -1097,8 +1142,23 @@ def run_analysis():
 
 
 @app.command()
-def analyze():
-    run_analysis()
+def analyze(
+    llm_provider: Optional[str] = typer.Option(
+        None, "--provider", "-p", help="LLM provider (deepseek,openai,anthropic,google)"
+    ),
+    quick_model: Optional[str] = typer.Option(
+        None, "--quick-model", help="Quick thinking model name"
+    ),
+    deep_model: Optional[str] = typer.Option(
+        None, "--deep-model", help="Deep thinking model name"
+    ),
+):
+    # Pass CLI options to run_analysis
+    run_analysis(
+        llm_provider=llm_provider,
+        quick_model=quick_model,
+        deep_model=deep_model
+    )
 
 
 if __name__ == "__main__":

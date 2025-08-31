@@ -1,0 +1,22 @@
+[
+  {
+    "id": "13a712b2",
+    "situation": "High inflation rate with rising interest rates and declining consumer spending",
+    "recommendation": "Consider defensive sectors like consumer staples and utilities. Review fixed-income portfolio duration."
+  },
+  {
+    "id": "ab296d94",
+    "situation": "Tech sector showing high volatility with increasing institutional selling pressure",
+    "recommendation": "Reduce exposure to high-growth tech stocks. Look for value opportunities in established tech companies with strong cash flows."
+  },
+  {
+    "id": "35324579",
+    "situation": "Strong dollar affecting emerging markets with increasing forex volatility",
+    "recommendation": "Hedge currency exposure in international positions. Consider reducing allocation to emerging market debt."
+  },
+  {
+    "id": "efe60134",
+    "situation": "Market showing signs of sector rotation with rising yields",
+    "recommendation": "Rebalance portfolio to maintain target allocations. Consider increasing exposure to sectors benefiting from higher rates."
+  }
+]

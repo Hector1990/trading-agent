@@ -703,105 +703,113 @@ def get_YFin_data(
 
 
 def get_stock_news_openai(ticker, curr_date):
+    """Get stock news using the configured LLM provider (DeepSeek by default)."""
+    from tradingagents.providers import ProviderFactory
+    
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
+    provider = config.get("llm_provider", "deepseek")
+    
+    # Create LLM using provider factory
+    llm = ProviderFactory.create_llm(
+        provider=provider,
         model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Social Media for {ticker} from 7 days before {curr_date} to {curr_date}? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+        thinking_type="quick",
+        temperature=0.7,
+        streaming=False
     )
-
-    return response.output[1].content[0].text
+    
+    # Create a simple prompt for news search
+    prompt = f"""Search for recent news and social media posts about {ticker} from 7 days before {curr_date} to {curr_date}. 
+    Focus on:
+    - Recent market developments
+    - Company announcements
+    - Social media sentiment
+    - Trading activity
+    
+    Please provide a comprehensive summary of the most relevant information found during this period."""
+    
+    try:
+        response = llm.invoke(prompt)
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        return f"Error retrieving news for {ticker}: {str(e)}"
 
 
 def get_global_news_openai(curr_date):
+    """Get global news using the configured LLM provider (DeepSeek by default)."""
+    from tradingagents.providers import ProviderFactory
+    
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
+    provider = config.get("llm_provider", "deepseek")
+    
+    # Create LLM using provider factory
+    llm = ProviderFactory.create_llm(
+        provider=provider,
         model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+        thinking_type="quick",
+        temperature=0.7,
+        streaming=False
     )
-
-    return response.output[1].content[0].text
+    
+    # Create a simple prompt for global news search
+    prompt = f"""Search for global and macroeconomic news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes.
+    Focus on:
+    - Federal Reserve announcements and monetary policy
+    - Economic indicators (GDP, inflation, employment)
+    - Geopolitical events affecting markets
+    - Central bank decisions globally
+    - Market-moving corporate earnings
+    
+    Please provide a comprehensive summary of the most relevant information found during this period."""
+    
+    try:
+        response = llm.invoke(prompt)
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        return f"Error retrieving global news: {str(e)}"
 
 
 def get_fundamentals_openai(ticker, curr_date):
+    """Get fundamental analysis using the configured LLM provider (DeepSeek by default)."""
+    from tradingagents.providers import ProviderFactory
+    
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
+    provider = config.get("llm_provider", "deepseek")
+    
+    # Create LLM using provider factory
+    llm = ProviderFactory.create_llm(
+        provider=provider,
         model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Fundamental for discussions on {ticker} during of the month before {curr_date} to the month of {curr_date}. Make sure you only get the data posted during that period. List as a table, with PE/PS/Cash flow/ etc",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+        thinking_type="quick",
+        temperature=0.7,
+        streaming=False
     )
-
-    return response.output[1].content[0].text
+    
+    # Create a simple prompt for fundamental analysis
+    prompt = f"""Provide a fundamental analysis for {ticker} covering the period from one month before {curr_date} to {curr_date}.
+    
+    Please include the following key metrics in a table format:
+    - P/E Ratio (Price-to-Earnings)
+    - P/S Ratio (Price-to-Sales)
+    - P/B Ratio (Price-to-Book)
+    - Cash Flow metrics
+    - Revenue growth
+    - Earnings growth
+    - Debt-to-Equity ratio
+    - Return on Equity (ROE)
+    - Current ratio
+    - Market capitalization
+    
+    Also provide:
+    - Recent earnings reports and guidance
+    - Key business developments
+    - Competitive position analysis
+    - Risk factors
+    
+    Format the numerical data as a clear table and provide analysis below."""
+    
+    try:
+        response = llm.invoke(prompt)
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        return f"Error retrieving fundamentals for {ticker}: {str(e)}"

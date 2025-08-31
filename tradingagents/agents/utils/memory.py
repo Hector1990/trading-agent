@@ -1,75 +1,88 @@
-import chromadb
-from chromadb.config import Settings
-from openai import OpenAI
+import os
+import json
+import hashlib
+from typing import List, Dict, Any
 
 
 class FinancialSituationMemory:
     def __init__(self, name, config):
-        if config["backend_url"] == "http://localhost:11434/v1":
-            self.embedding = "nomic-embed-text"
-        else:
-            self.embedding = "text-embedding-3-small"
-        self.client = OpenAI(base_url=config["backend_url"])
-        self.chroma_client = chromadb.Client(Settings(allow_reset=True))
-        self.situation_collection = self.chroma_client.create_collection(name=name)
-
-    def get_embedding(self, text):
-        """Get OpenAI embedding for a text"""
+        """Initialize memory system with simple text-based storage"""
+        self.name = name
+        self.config = config
+        self.memory_file = f"{name}_memory.json"
+        self.situations = []
         
-        response = self.client.embeddings.create(
-            model=self.embedding, input=text
-        )
-        return response.data[0].embedding
+        # Load existing memories if file exists
+        if os.path.exists(self.memory_file):
+            try:
+                with open(self.memory_file, 'r') as f:
+                    self.situations = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                self.situations = []
+
+    def _save_to_file(self):
+        """Save current situations to file"""
+        try:
+            with open(self.memory_file, 'w') as f:
+                json.dump(self.situations, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save memory to file: {e}")
+
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """Calculate simple text similarity using keyword overlap"""
+        # Convert to lowercase and split into words
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        
+        # Calculate Jaccard similarity
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        if union == 0:
+            return 0.0
+        
+        return intersection / union
 
     def add_situations(self, situations_and_advice):
         """Add financial situations and their corresponding advice. Parameter is a list of tuples (situation, rec)"""
-
-        situations = []
-        advice = []
-        ids = []
-        embeddings = []
-
-        offset = self.situation_collection.count()
-
-        for i, (situation, recommendation) in enumerate(situations_and_advice):
-            situations.append(situation)
-            advice.append(recommendation)
-            ids.append(str(offset + i))
-            embeddings.append(self.get_embedding(situation))
-
-        self.situation_collection.add(
-            documents=situations,
-            metadatas=[{"recommendation": rec} for rec in advice],
-            embeddings=embeddings,
-            ids=ids,
-        )
+        for situation, recommendation in situations_and_advice:
+            memory_entry = {
+                "id": hashlib.md5(situation.encode()).hexdigest()[:8],
+                "situation": situation,
+                "recommendation": recommendation
+            }
+            
+            # Check if this situation already exists
+            existing_ids = [mem["id"] for mem in self.situations]
+            if memory_entry["id"] not in existing_ids:
+                self.situations.append(memory_entry)
+        
+        self._save_to_file()
 
     def get_memories(self, current_situation, n_matches=1):
-        """Find matching recommendations using OpenAI embeddings"""
-        query_embedding = self.get_embedding(current_situation)
-
-        results = self.situation_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_matches,
-            include=["metadatas", "documents", "distances"],
-        )
-
-        matched_results = []
-        for i in range(len(results["documents"][0])):
-            matched_results.append(
-                {
-                    "matched_situation": results["documents"][0][i],
-                    "recommendation": results["metadatas"][0][i]["recommendation"],
-                    "similarity_score": 1 - results["distances"][0][i],
-                }
-            )
-
-        return matched_results
+        """Find matching recommendations using text similarity"""
+        if not self.situations:
+            return []
+        
+        # Calculate similarity scores for all stored situations
+        scored_memories = []
+        for memory in self.situations:
+            similarity = self._calculate_similarity(current_situation, memory["situation"])
+            scored_memories.append({
+                "matched_situation": memory["situation"],
+                "recommendation": memory["recommendation"],
+                "similarity_score": similarity
+            })
+        
+        # Sort by similarity score and return top n_matches
+        scored_memories.sort(key=lambda x: x["similarity_score"], reverse=True)
+        return scored_memories[:n_matches]
 
 
 if __name__ == "__main__":
     # Example usage
-    matcher = FinancialSituationMemory()
+    config = {"llm_provider": "test"}
+    matcher = FinancialSituationMemory("test", config)
 
     # Example data
     example_data = [
@@ -91,23 +104,9 @@ if __name__ == "__main__":
         ),
     ]
 
-    # Add the example situations and recommendations
+    # Add example data
     matcher.add_situations(example_data)
 
-    # Example query
-    current_situation = """
-    Market showing increased volatility in tech sector, with institutional investors 
-    reducing positions and rising interest rates affecting growth stock valuations
-    """
-
-    try:
-        recommendations = matcher.get_memories(current_situation, n_matches=2)
-
-        for i, rec in enumerate(recommendations, 1):
-            print(f"\nMatch {i}:")
-            print(f"Similarity Score: {rec['similarity_score']:.2f}")
-            print(f"Matched Situation: {rec['matched_situation']}")
-            print(f"Recommendation: {rec['recommendation']}")
-
-    except Exception as e:
-        print(f"Error during recommendation: {str(e)}")
+    # Test retrieval
+    test_query = "High inflation and rising rates affecting market sentiment"
+    matches = matcher.get_memories(test_query, n_matches=2)

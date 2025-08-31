@@ -8,11 +8,27 @@ DEFAULT_CONFIG = {
         os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
         "dataflows/data_cache",
     ),
-    # LLM settings
-    "llm_provider": "openai",
-    "deep_think_llm": "o4-mini",
-    "quick_think_llm": "gpt-4o-mini",
-    "backend_url": "https://api.openai.com/v1",
+    "state_file_path": "state_history.json",
+    "log_file_path": "run_logs.log",
+    "dataflow_config": None,
+    "llm_provider": "deepseek",
+    "deep_think_llm": "deepseek-chat",  # Using chat model for both to ensure compatibility
+    "quick_think_llm": "deepseek-chat",
+    "backend_url": "https://api.deepseek.com/v1",  # Official DeepSeek API endpoint
+    "embedding_model": "text-embedding-3-small",  # Standard OpenAI-compatible embedding model
+    "bull_max_iter": 5,
+    "bear_max_iter": 5,
+    "report_format": None,
+    "recursion_limit": 50,
+    "max_retries": 1,
+    "retry_on": None,
+    "retry_on_class": "requests.exceptions.HTTPError",
+    "checkpoint_ns": None,
+    "enable_memory": False,
+    "max_concurrency": None,
+    "run_input": {},
+    "stream_output": False,
+    "verbose": False,
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
