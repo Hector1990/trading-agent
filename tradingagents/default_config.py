@@ -12,7 +12,7 @@ DEFAULT_CONFIG = {
     "log_file_path": "run_logs.log",
     "dataflow_config": None,
     "llm_provider": "deepseek",
-    "deep_think_llm": "deepseek-chat",  # Using chat model for both to ensure compatibility
+    "deep_think_llm": "deepseek-reasoner",  # Using chat model for both to ensure compatibility
     "quick_think_llm": "deepseek-chat",
     "backend_url": "https://api.deepseek.com/v1",  # Official DeepSeek API endpoint
     "embedding_model": "text-embedding-3-small",  # Standard OpenAI-compatible embedding model

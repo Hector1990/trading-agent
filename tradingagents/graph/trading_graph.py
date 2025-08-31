@@ -63,7 +63,7 @@ class TradingAgentsGraph:
             provider=provider,
             model=self.config["quick_think_llm"],
             thinking_type="quick",
-            temperature=0.3,
+            temperature=1,
             streaming=True,
             base_url=self.config.get("backend_url"),
         )
@@ -72,7 +72,7 @@ class TradingAgentsGraph:
             provider=provider,
             model=self.config["deep_think_llm"],
             thinking_type="deep",
-            temperature=0.3,
+            temperature=1,
             streaming=True,
             base_url=self.config.get("backend_url"),
         )
@@ -105,8 +105,8 @@ class TradingAgentsGraph:
         )
 
         self.propagator = Propagator()
-        self.reflector = Reflector(self.quick_thinking_llm)
-        self.signal_processor = SignalProcessor(self.quick_thinking_llm)
+        self.reflector = Reflector(self.deep_thinking_llm)
+        self.signal_processor = SignalProcessor(self.deep_thinking_llm)
 
         # State tracking
         self.curr_state = None

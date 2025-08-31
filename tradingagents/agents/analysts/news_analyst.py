@@ -1,4 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from tradingagents.agents.utils.prompts_zh import get_localized_prompt
 import time
 import json
 
@@ -17,10 +18,8 @@ def create_news_analyst(llm, toolkit):
                 toolkit.get_google_news,
             ]
 
-        system_message = (
-            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Look at news from EODHD, and finnhub to be comprehensive. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
-            + """ Make sure to append a Makrdown table at the end of the report to organize key points in the report, organized and easy to read."""
-        )
+        # Use Chinese localized prompt
+        system_message = get_localized_prompt("news_analyst").format(ticker=ticker)
 
         prompt = ChatPromptTemplate.from_messages(
             [

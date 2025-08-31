@@ -5,14 +5,16 @@ from pathlib import Path
 from functools import wraps
 from rich.console import Console
 from rich.panel import Panel
-from rich.spinner import Spinner
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.tree import Tree
+from rich.text import Text
+from rich.layout import Layout
 from rich.live import Live
 from rich.columns import Columns
+from rich.align import Align
+from rich.prompt import Prompt
 from rich.markdown import Markdown
-from rich.layout import Layout
-from rich.text import Text
-from rich.live import Live
-from rich.table import Table
 from collections import deque
 import time
 from rich.tree import Tree
@@ -24,12 +26,15 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
+from tradingagents.localization.zh_CN import (
+    CLI_MESSAGES, REPORT_SECTIONS, ERROR_MESSAGES, get_message
+)
 
 console = Console()
 
 app = typer.Typer(
     name="TradingAgents",
-    help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
+    help="TradingAgents CLI: 多智能体 LLM 金融交易框架",
     add_completion=True,  # Enable shell completion
 )
 
@@ -43,22 +48,22 @@ class MessageBuffer:
         self.final_report = None  # Store the complete final report
         self.agent_status = {
             # Analyst Team
-            "Market Analyst": "pending",
-            "Social Analyst": "pending",
-            "News Analyst": "pending",
-            "Fundamentals Analyst": "pending",
+            CLI_MESSAGES["agent_market"]: "pending",
+            CLI_MESSAGES["agent_social"]: "pending",
+            CLI_MESSAGES["agent_news"]: "pending",
+            CLI_MESSAGES["agent_fundamentals"]: "pending",
             # Research Team
-            "Bull Researcher": "pending",
-            "Bear Researcher": "pending",
-            "Research Manager": "pending",
+            CLI_MESSAGES["agent_bull"]: "pending",
+            CLI_MESSAGES["agent_bear"]: "pending",
+            CLI_MESSAGES["agent_research_manager"]: "pending",
             # Trading Team
-            "Trader": "pending",
+            CLI_MESSAGES["agent_trader"]: "pending",
             # Risk Management Team
-            "Risky Analyst": "pending",
-            "Neutral Analyst": "pending",
-            "Safe Analyst": "pending",
+            CLI_MESSAGES["agent_risky"]: "pending",
+            CLI_MESSAGES["agent_neutral"]: "pending",
+            CLI_MESSAGES["agent_safe"]: "pending",
             # Portfolio Management Team
-            "Portfolio Manager": "pending",
+            CLI_MESSAGES["agent_portfolio"]: "pending",
         }
         self.current_agent = None
         self.report_sections = {
@@ -103,13 +108,13 @@ class MessageBuffer:
         if latest_section and latest_content:
             # Format the current section for display
             section_titles = {
-                "market_report": "Market Analysis",
-                "sentiment_report": "Social Sentiment",
-                "news_report": "News Analysis",
-                "fundamentals_report": "Fundamentals Analysis",
-                "investment_plan": "Research Team Decision",
-                "trader_investment_plan": "Trading Team Plan",
-                "final_trade_decision": "Portfolio Management Decision",
+                "market_report": REPORT_SECTIONS["market_analysis"],
+                "sentiment_report": REPORT_SECTIONS["social_sentiment"],
+                "news_report": REPORT_SECTIONS["news_analysis"],
+                "fundamentals_report": REPORT_SECTIONS["fundamentals_analysis"],
+                "investment_plan": REPORT_SECTIONS["research_decision"],
+                "trader_investment_plan": REPORT_SECTIONS["trading_plan"],
+                "final_trade_decision": REPORT_SECTIONS["portfolio_decision"],
             }
             self.current_report = (
                 f"### {section_titles[latest_section]}\n{latest_content}"
@@ -131,37 +136,37 @@ class MessageBuffer:
                 "fundamentals_report",
             ]
         ):
-            report_parts.append("## Analyst Team Reports")
+            report_parts.append(f"## {CLI_MESSAGES['team_analyst']}报告")
             if self.report_sections["market_report"]:
                 report_parts.append(
-                    f"### Market Analysis\n{self.report_sections['market_report']}"
+                    f"### {REPORT_SECTIONS['market_analysis']}\n{self.report_sections['market_report']}"
                 )
             if self.report_sections["sentiment_report"]:
                 report_parts.append(
-                    f"### Social Sentiment\n{self.report_sections['sentiment_report']}"
+                    f"### {REPORT_SECTIONS['social_sentiment']}\n{self.report_sections['sentiment_report']}"
                 )
             if self.report_sections["news_report"]:
                 report_parts.append(
-                    f"### News Analysis\n{self.report_sections['news_report']}"
+                    f"### {REPORT_SECTIONS['news_analysis']}\n{self.report_sections['news_report']}"
                 )
             if self.report_sections["fundamentals_report"]:
                 report_parts.append(
-                    f"### Fundamentals Analysis\n{self.report_sections['fundamentals_report']}"
+                    f"### {REPORT_SECTIONS['fundamentals_analysis']}\n{self.report_sections['fundamentals_report']}"
                 )
 
         # Research Team Reports
         if self.report_sections["investment_plan"]:
-            report_parts.append("## Research Team Decision")
+            report_parts.append(f"## {REPORT_SECTIONS['research_decision']}")
             report_parts.append(f"{self.report_sections['investment_plan']}")
 
         # Trading Team Reports
         if self.report_sections["trader_investment_plan"]:
-            report_parts.append("## Trading Team Plan")
+            report_parts.append(f"## {REPORT_SECTIONS['trading_plan']}")
             report_parts.append(f"{self.report_sections['trader_investment_plan']}")
 
         # Portfolio Management Decision
         if self.report_sections["final_trade_decision"]:
-            report_parts.append("## Portfolio Management Decision")
+            report_parts.append(f"## {REPORT_SECTIONS['portfolio_decision']}")
             report_parts.append(f"{self.report_sections['final_trade_decision']}")
 
         self.final_report = "\n\n".join(report_parts) if report_parts else None
@@ -190,9 +195,9 @@ def update_display(layout, spinner_text=None):
     # Header with welcome message
     layout["header"].update(
         Panel(
-            "[bold green]Welcome to TradingAgents CLI[/bold green]\n"
-            "[dim]© [Tauric Research](https://github.com/TauricResearch)[/dim]",
-            title="Welcome to TradingAgents",
+            f"[bold green]{CLI_MESSAGES['welcome_title']} CLI[/bold green]\n"
+            "[dim]  Built by [Tauric Research](https://github.com/TauricResearch)[/dim]",
+            title=CLI_MESSAGES['welcome_title'],
             border_style="green",
             padding=(1, 2),
             expand=True,
@@ -209,22 +214,30 @@ def update_display(layout, spinner_text=None):
         padding=(0, 2),  # Add horizontal padding
         expand=True,  # Make table expand to fill available space
     )
-    progress_table.add_column("Team", style="cyan", justify="center", width=20)
-    progress_table.add_column("Agent", style="green", justify="center", width=20)
-    progress_table.add_column("Status", style="yellow", justify="center", width=20)
+    progress_table.add_column("团队", style="cyan", justify="center", width=20)
+    progress_table.add_column("代理", style="green", justify="center", width=20)
+    progress_table.add_column("状态", style="yellow", justify="center", width=20)
 
     # Group agents by team
     teams = {
-        "Analyst Team": [
-            "Market Analyst",
-            "Social Analyst",
-            "News Analyst",
-            "Fundamentals Analyst",
+        CLI_MESSAGES['team_analyst']: [
+            CLI_MESSAGES['agent_market'],
+            CLI_MESSAGES['agent_social'],
+            CLI_MESSAGES['agent_news'],
+            CLI_MESSAGES['agent_fundamentals'],
         ],
-        "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
-        "Trading Team": ["Trader"],
-        "Risk Management": ["Risky Analyst", "Neutral Analyst", "Safe Analyst"],
-        "Portfolio Management": ["Portfolio Manager"],
+        CLI_MESSAGES['team_research']: [
+            CLI_MESSAGES['agent_bull'],
+            CLI_MESSAGES['agent_bear'],
+            CLI_MESSAGES['agent_research_manager']
+        ],
+        CLI_MESSAGES['team_trading']: [CLI_MESSAGES['agent_trader']],
+        CLI_MESSAGES['team_risk']: [
+            CLI_MESSAGES['agent_risky'],
+            CLI_MESSAGES['agent_neutral'],
+            CLI_MESSAGES['agent_safe']
+        ],
+        CLI_MESSAGES['team_portfolio']: [CLI_MESSAGES['agent_portfolio']],
     }
 
     for team, agents in teams.items():
@@ -242,7 +255,13 @@ def update_display(layout, spinner_text=None):
                 "completed": "green",
                 "error": "red",
             }.get(status, "white")
-            status_cell = f"[{status_color}]{status}[/{status_color}]"
+            status_text = {
+                "pending": CLI_MESSAGES['status_pending'],
+                "completed": CLI_MESSAGES['status_completed'],
+                "error": CLI_MESSAGES['status_error'],
+                "in_progress": CLI_MESSAGES['status_in_progress']
+            }.get(status, status)
+            status_cell = f"[{status_color}]{status_text}[/{status_color}]"
         progress_table.add_row(team, first_agent, status_cell)
 
         # Add remaining agents in team
@@ -259,14 +278,20 @@ def update_display(layout, spinner_text=None):
                     "completed": "green",
                     "error": "red",
                 }.get(status, "white")
-                status_cell = f"[{status_color}]{status}[/{status_color}]"
+                status_text = {
+                    "pending": CLI_MESSAGES['status_pending'],
+                    "completed": CLI_MESSAGES['status_completed'],
+                    "error": CLI_MESSAGES['status_error'],
+                    "in_progress": CLI_MESSAGES['status_in_progress']
+                }.get(status, status)
+                status_cell = f"[{status_color}]{status_text}[/{status_color}]"
             progress_table.add_row("", agent, status_cell)
 
         # Add horizontal line after each team
         progress_table.add_row("─" * 20, "─" * 20, "─" * 20, style="dim")
 
     layout["progress"].update(
-        Panel(progress_table, title="Progress", border_style="cyan", padding=(1, 2))
+        Panel(progress_table, title=CLI_MESSAGES['progress_title'], border_style="cyan", padding=(1, 2))
     )
 
     # Messages panel showing recent messages and tool calls
@@ -279,10 +304,10 @@ def update_display(layout, spinner_text=None):
         show_lines=True,  # Keep horizontal lines
         padding=(0, 1),  # Add some padding between columns
     )
-    messages_table.add_column("Time", style="cyan", width=8, justify="center")
-    messages_table.add_column("Type", style="green", width=10, justify="center")
+    messages_table.add_column("时间", style="cyan", width=8, justify="center")
+    messages_table.add_column("类型", style="green", width=10, justify="center")
     messages_table.add_column(
-        "Content", style="white", no_wrap=False, ratio=1
+        "内容", style="white", no_wrap=False, ratio=1
     )  # Make content column expand
 
     # Combine tool calls and messages
@@ -293,7 +318,7 @@ def update_display(layout, spinner_text=None):
         # Truncate tool call args if too long
         if isinstance(args, str) and len(args) > 100:
             args = args[:97] + "..."
-        all_messages.append((timestamp, "Tool", f"{tool_name}: {args}"))
+        all_messages.append((timestamp, CLI_MESSAGES['type_tool'], f"{tool_name}: {args}"))
 
     # Add regular messages
     for timestamp, msg_type, content in message_buffer.messages:
@@ -336,18 +361,18 @@ def update_display(layout, spinner_text=None):
         messages_table.add_row(timestamp, msg_type, wrapped_content)
 
     if spinner_text:
-        messages_table.add_row("", "Spinner", spinner_text)
+        messages_table.add_row("", CLI_MESSAGES['type_spinner'], spinner_text)
 
     # Add a footer to indicate if messages were truncated
     if len(all_messages) > max_messages:
         messages_table.footer = (
-            f"[dim]Showing last {max_messages} of {len(all_messages)} messages[/dim]"
+            f"[dim]{get_message('messages_truncated', shown=max_messages, total=len(all_messages))}[/dim]"
         )
 
     layout["messages"].update(
         Panel(
             messages_table,
-            title="Messages & Tools",
+            title=CLI_MESSAGES['messages_title'],
             border_style="blue",
             padding=(1, 2),
         )
@@ -358,7 +383,7 @@ def update_display(layout, spinner_text=None):
         layout["analysis"].update(
             Panel(
                 Markdown(message_buffer.current_report),
-                title="Current Report",
+                title=CLI_MESSAGES['current_report_title'],
                 border_style="green",
                 padding=(1, 2),
             )
@@ -366,8 +391,8 @@ def update_display(layout, spinner_text=None):
     else:
         layout["analysis"].update(
             Panel(
-                "[italic]Waiting for analysis report...[/italic]",
-                title="Current Report",
+                f"[italic]{CLI_MESSAGES['waiting_for_analysis']}[/italic]",
+                title=CLI_MESSAGES['current_report_title'],
                 border_style="green",
                 padding=(1, 2),
             )
@@ -379,14 +404,18 @@ def update_display(layout, spinner_text=None):
         1 for _, msg_type, _ in message_buffer.messages if msg_type == "Reasoning"
     )
     reports_count = sum(
-        1 for content in message_buffer.report_sections.values() if content is not None
+        1 for section in message_buffer.report_sections.values() if section
+    )
+
+    stats_text = (
+        f"[bold cyan]{CLI_MESSAGES['stats_tool_calls']}:[/bold cyan] {tool_calls_count} | "
+        f"[bold green]{CLI_MESSAGES['stats_llm_calls']}:[/bold green] {llm_calls_count} | "
+        f"[bold yellow]{CLI_MESSAGES['stats_reports']}:[/bold yellow] {reports_count}"
     )
 
     stats_table = Table(show_header=False, box=None, padding=(0, 2), expand=True)
     stats_table.add_column("Stats", justify="center")
-    stats_table.add_row(
-        f"Tool Calls: {tool_calls_count} | LLM Calls: {llm_calls_count} | Generated Reports: {reports_count}"
-    )
+    stats_table.add_row(stats_text)
 
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
@@ -409,10 +438,14 @@ def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
     # Create welcome box content
     welcome_content = f"{welcome_ascii}\n"
     welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
-    welcome_content += "[bold]Workflow Steps:[/bold]\n"
-    welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
+    # Create team hierarchy tree
+    tree = Tree(f"[bold yellow]{CLI_MESSAGES['workflow_steps']}[/bold yellow]")
+    tree.add(
+        f"[bold cyan]{CLI_MESSAGES['workflow_description']}[/bold cyan]"
+    )
+    welcome_content += str(tree) + "\n"
     welcome_content += (
-        "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
+        "[dim]  Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
     )
 
     # Create and center the welcome box
@@ -440,18 +473,29 @@ def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
             "Step 1: Ticker Symbol", "Enter the ticker symbol to analyze", "SPY"
         )
     )
-    selected_ticker = get_ticker()
+    selected_ticker = get_ticker_interactive()
 
     # Step 2: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
-        )
+    console.print(Panel(
+        f"[bold cyan]{CLI_MESSAGES['step_date']}[/bold cyan]\n\n"
+        f"[yellow]{CLI_MESSAGES['step_date_prompt']}[/yellow]",
+        border_style="blue",
+        padding=(1, 2)
+    ))
+    console.print()
+    
+    date_str = Prompt.ask(
+        f"[bold green]{CLI_MESSAGES['step_date'].split(':')[1].strip()}[/bold green]",
+        default=default_date
     )
-    analysis_date = get_analysis_date()
+    
+    try:
+        datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        analysis_date = date_str
+    except ValueError:
+        console.print(f"[red]⚠ {CLI_MESSAGES['invalid_date_format'].format(date=date_str)}[/red]")
+        analysis_date = default_date
 
     # Step 3: Select analysts
     console.print(
@@ -459,7 +503,7 @@ def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
             "Step 3: Analysts Team", "Select your LLM analyst agents for the analysis"
         )
     )
-    selected_analysts = select_analysts()
+    selected_analysts = get_analysts_interactive()
     console.print(
         f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
     )
@@ -467,63 +511,19 @@ def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
     # Step 4: Research depth
     console.print(
         create_question_box(
-            "Step 4: Research Depth", "Select your research depth level"
+            "Step 4: Research Depth", "Select the depth of analysis"
         )
     )
-    selected_research_depth = select_research_depth()
+    selected_research_depth = get_research_depth_interactive()
 
-    # Step 5: LLM Backend Selection
-    console.print(
-        create_question_box(
-            "Step 5: LLM Backend", "Select which LLM service to use"
-        )
+    # Step 5: LLM Provider
+    provider_key, selected_shallow_thinker, selected_deep_thinker, backend_url = get_llm_provider_interactive(
+        llm_provider, quick_model, deep_model
     )
-    # Get LLM provider and models - use CLI options if provided
-    if llm_provider:
-        provider_key = llm_provider.lower()
-        # Map provider name to backend URL
-        backend_urls = {
-            "deepseek": "https://api.deepseek.com",
-            "openai": "https://api.openai.com/v1",
-            "anthropic": "https://api.anthropic.com/",
-            "google": "https://generativelanguage.googleapis.com/v1",
-            "openrouter": "https://openrouter.ai/api/v1",
-            "ollama": "http://localhost:11434/v1"
-        }
-        backend_url = backend_urls.get(provider_key, "https://api.deepseek.com")
-        provider_name = llm_provider.title()
-    else:
-        provider_name, backend_url = select_llm_provider()
-        provider_key = provider_name.lower()
-    
-    # Set model selection based on provider
-    if quick_model:
-        quick_think_llm = quick_model
-    elif provider_key in ["deepseek", "openai", "anthropic", "google", "openrouter", "ollama"]:
-        quick_think_llm = select_shallow_thinking_agent(provider_key)
-    else:
-        # Default to DeepSeek models if provider is not recognized
-        quick_think_llm = "deepseek-chat"
-    
-    if deep_model:
-        deep_think_llm = deep_model
-    elif provider_key in ["deepseek", "openai", "anthropic", "google", "openrouter", "ollama"]:
-        deep_think_llm = select_deep_thinking_agent(provider_key)
-    else:
-        deep_think_llm = "deepseek-reasoner"
-
-    # Step 6: Thinking agents
-    console.print(
-        create_question_box(
-            "Step 6: Thinking Agents", "Select your thinking agents for analysis"
-        )
-    )
-    selected_shallow_thinker = quick_think_llm
-    selected_deep_thinker = deep_think_llm
 
     return {
         "ticker": selected_ticker,
-        "analysis_date": analysis_date,
+        "date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
         "llm_provider": provider_key,
@@ -533,9 +533,121 @@ def get_user_selections(llm_provider=None, quick_model=None, deep_model=None):
     }
 
 
-def get_ticker():
-    """Get ticker symbol from user input."""
-    return typer.prompt("", default="SPY")
+def get_analysts_interactive():
+    """Interactive analyst selection"""
+    console.print(Panel(
+        f"[bold cyan]{CLI_MESSAGES['step_analysts']}[/bold cyan]\n\n"
+        f"[yellow]{CLI_MESSAGES['step_analysts_prompt']}[/yellow]",
+        border_style="blue",
+        padding=(1, 2)
+    ))
+    console.print()
+    
+    # Show analyst options
+    for idx, analyst_type in enumerate(AnalystType, 1):
+        console.print(f"  {idx}. {analyst_type.value}")
+    console.print()
+    
+    selected_str = Prompt.ask(
+        f"[bold green]{CLI_MESSAGES['step_analysts_select']}[/bold green]",
+        default="1,2,3,4"
+    )
+    
+    # Parse selections
+    try:
+        indices = [int(x.strip()) for x in selected_str.split(',')]
+        analysts = [list(AnalystType)[i-1] for i in indices if 1 <= i <= len(AnalystType)]
+        return analysts if analysts else list(AnalystType)
+    except:
+        return list(AnalystType)
+
+
+def get_ticker_interactive():
+    """Interactive ticker selection"""
+    console.print(Panel(
+        f"[bold cyan]{CLI_MESSAGES['step_ticker']}[/bold cyan]\n\n"
+        f"[yellow]{CLI_MESSAGES['step_ticker_prompt']}[/yellow]",
+        border_style="blue",
+        padding=(1, 2)
+    ))
+    console.print()
+
+    ticker = Prompt.ask(
+        f"[bold green]{CLI_MESSAGES['step_ticker'].split(':')[1].strip()}[/bold green]",
+        default="SPY",
+    )
+    return ticker.upper()
+
+
+def get_research_depth_interactive():
+    """Interactive research depth selection"""
+    console.print(Panel(
+        f"[bold cyan]{CLI_MESSAGES['step_research_depth']}[/bold cyan]\n\n"
+        f"[yellow]{CLI_MESSAGES['step_research_depth_prompt']}[/yellow]",
+        border_style="blue",
+        padding=(1, 2)
+    ))
+    console.print()
+    
+    console.print("  1. 浅层分析（快速）")
+    console.print("  2. 深度分析（详细）")
+    console.print()
+    
+    choice = Prompt.ask(
+        f"[bold green]选择研究深度[/bold green]",
+        default="2"
+    )
+    
+    return "deep" if choice == "2" else "shallow"
+
+
+def get_llm_provider_interactive(llm_provider=None, quick_model=None, deep_model=None):
+    """Interactive LLM provider selection"""
+    if llm_provider:
+        # Use provided values
+        return llm_provider, quick_model, deep_model, DEFAULT_CONFIG.get("backend_url", "")
+    
+    console.print(Panel(
+        f"[bold cyan]{CLI_MESSAGES['step_llm_provider']}[/bold cyan]\n\n"
+        f"[yellow]{CLI_MESSAGES['step_llm_provider_prompt']}[/yellow]",
+        border_style="blue",
+        padding=(1, 2)
+    ))
+    console.print()
+    
+    providers = ["openai", "deepseek", "azure", "local"]
+    for idx, provider in enumerate(providers, 1):
+        console.print(f"  {idx}. {provider}")
+    console.print()
+    
+    choice = Prompt.ask(
+        f"[bold green]选择LLM提供商[/bold green]",
+        default="1"
+    )
+    
+    try:
+        provider_idx = int(choice) - 1
+        if 0 <= provider_idx < len(providers):
+            provider = providers[provider_idx]
+        else:
+            provider = "openai"
+    except:
+        provider = "openai"
+    
+    # Get default models based on provider
+    if provider == "openai":
+        quick = quick_model or "gpt-4o-mini"
+        deep = deep_model or "gpt-4o"
+    elif provider == "deepseek":
+        quick = quick_model or "deepseek-chat"
+        deep = deep_model or "deepseek-chat"
+    else:
+        quick = quick_model or "default"
+        deep = deep_model or "default"
+    
+    backend_url = DEFAULT_CONFIG.get("backend_url", "")
+    
+    return provider, quick, deep, backend_url
 
 
 def get_analysis_date():
@@ -795,7 +907,7 @@ def run_analysis(llm_provider=None, quick_model=None, deep_model=None):
     )
 
     # Create result directory
-    results_dir = Path(config["results_dir"]) / selections["ticker"] / selections["analysis_date"]
+    results_dir = Path(config["results_dir"]) / selections["ticker"] / selections["date"]
     results_dir.mkdir(parents=True, exist_ok=True)
     report_dir = results_dir / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -851,7 +963,7 @@ def run_analysis(llm_provider=None, quick_model=None, deep_model=None):
         # Add initial messages
         message_buffer.add_message("System", f"Selected ticker: {selections['ticker']}")
         message_buffer.add_message(
-            "System", f"Analysis date: {selections['analysis_date']}"
+            "System", f"Analysis date: {selections['date']}"
         )
         message_buffer.add_message(
             "System",
@@ -876,13 +988,13 @@ def run_analysis(llm_provider=None, quick_model=None, deep_model=None):
 
         # Create spinner text
         spinner_text = (
-            f"Analyzing {selections['ticker']} on {selections['analysis_date']}..."
+            f"Analyzing {selections['ticker']} on {selections['date']}..."
         )
         update_display(layout, spinner_text)
 
         # Initialize state and get graph args
         init_agent_state = graph.propagator.create_initial_state(
-            selections["ticker"], selections["analysis_date"]
+            selections["ticker"], selections["date"]
         )
         args = graph.propagator.get_graph_args()
 
@@ -1127,7 +1239,7 @@ def run_analysis(llm_provider=None, quick_model=None, deep_model=None):
             message_buffer.update_agent_status(agent, "completed")
 
         message_buffer.add_message(
-            "Analysis", f"Completed analysis for {selections['analysis_date']}"
+            "Analysis", f"Completed analysis for {selections['date']}"
         )
 
         # Update final report sections

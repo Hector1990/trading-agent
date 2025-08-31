@@ -712,7 +712,7 @@ def get_stock_news_openai(ticker, curr_date):
     # Create LLM using provider factory
     llm = ProviderFactory.create_llm(
         provider=provider,
-        model=config["quick_think_llm"],
+        model=config["deep_think_llm"],
         thinking_type="quick",
         temperature=0.7,
         streaming=False
@@ -745,7 +745,7 @@ def get_global_news_openai(curr_date):
     # Create LLM using provider factory
     llm = ProviderFactory.create_llm(
         provider=provider,
-        model=config["quick_think_llm"],
+        model=config["deep_think_llm"],
         thinking_type="quick",
         temperature=0.7,
         streaming=False
@@ -779,7 +779,7 @@ def get_fundamentals_openai(ticker, curr_date):
     # Create LLM using provider factory
     llm = ProviderFactory.create_llm(
         provider=provider,
-        model=config["quick_think_llm"],
+        model=config["deep_think_llm"],
         thinking_type="quick",
         temperature=0.7,
         streaming=False

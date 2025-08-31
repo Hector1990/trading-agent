@@ -1,7 +1,57 @@
-Based on the provided analysis, the evidence strongly supports a defensive approach given the current market conditions. The combination of stretched valuations, technical divergence, and emerging cracks in key narratives (e.g., NVIDIA’s slowdown impacting the AI-driven growth thesis) suggests elevated downside risk relative to upside potential. The asymmetrical risk/reward profile, with limited gains if the bullish thesis holds but significant losses if macro or earnings conditions deteriorate, aligns with a risk-management-focused strategy.
+### 交易执行计划
 
-Reflecting on past errors, I recall that holding positions during "healthy consolidations" in overextended markets often led to unnecessary drawdowns when macro risks materialized. This reinforces the need to prioritize capital preservation over narrative optimism when evidence points to vulnerability.
+#### 交易决策
+**操作：持有并等待回调买入机会 (Hold with Strong Buy on Dips Bias)**
 
-Therefore, I recommend executing the proposed defensive actions: trim SPY exposure by 30–50%, set a stop-loss below 628, and reallocate proceeds to defensive assets like USMV or SGOV while awaiting a better entry point, such as a test of the 200-day SMA.
+#### 仓位管理
+- 建议仓位：初始建仓不超过总资金的3%，回调至目标区间后可分批加仓至总资金的8-10%
+- 分批建仓策略：若价格进入$505-$515区间，分2-3批等额建仓（例如：$515建仓1/3，$510建仓1/3，$505建仓1/3）
 
-FINAL TRANSACTION PROPOSAL: **SELL**
+#### 价位设置
+- 入场价：$505-$515（回调买入区间）
+- 目标价：
+  - 第一目标：$535（6-8周）
+  - 第二目标：$555（3-6个月）
+- 止损价：$490（严格止损位）
+
+#### 时间框架
+- 持仓周期：中期（3-6个月）
+- 关键时间节点：
+  - 每月CPI/PCE数据公布日
+  - 非农就业数据发布日
+  - 9月FOMC会议（9月17-18日）
+  - 主要科技股财报季（7月中旬）
+
+#### 风险控制
+- 最大亏损容忍度：单笔交易不超过总资金的2%
+- 风险收益比：1:2.5（以$510入场，$490止损，$555目标计算）
+- 应急预案：
+  - 若跌破$490，立即止损并重新评估市场结构
+  - 若CPI/PCE数据超预期升温，减仓50%
+  - 若非农数据显示就业市场急剧恶化，暂停加仓计划
+
+#### 执行细节
+1. **当前持仓管理**：
+   - 现有持仓维持，止损位上移至$490
+   - 不在当前价位（约$525+）追加任何仓位
+
+2. **新仓建立策略**：
+   - 设置价格警报：$515, $510, $505
+   - 每达到一个目标价位，执行预定建仓计划
+   - 每次建仓后立即设置$490止损单
+
+3. **期权对冲策略**：
+   - 购买1-2%仓位价值的SPY 9月$490看跌期权
+   - 作为投资组合保险，成本控制在总资金的0.5%以内
+
+4. **监控与调整**：
+   - 每日监控技术指标（重点关注50日均线支撑）
+   - 每周重新评估美联储降息概率变化
+   - 每月宏观经济数据公布后重新评估投资逻辑
+
+5. **退出策略**：
+   - 达到$535第一目标时，减仓50%锁定利润
+   - 剩余仓位止损上移至$515
+   - 达到$555第二目标时，全面获利了结
+
+**执行备注**：本策略强调纪律性和耐心，拒绝追高操作。市场当前处于关键转折期，需要严格的风险管理和灵活的策略调整能力。
