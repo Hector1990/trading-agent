@@ -127,6 +127,10 @@ def select_shallow_thinking_agent(provider) -> str:
 
     # Define shallow thinking llm engine options with their corresponding model names
     SHALLOW_AGENT_OPTIONS = {
+        "deepseek": [
+            ("DeepSeek Chat - Flagship general-purpose assistant", "deepseek-chat"),
+            ("DeepSeek Coder - Code-specialized variant", "deepseek-coder"),
+        ],
         "openai": [
             ("GPT-4o-mini - Fast and efficient for quick tasks", "gpt-4o-mini"),
             ("GPT-4.1-nano - Ultra-lightweight model for basic operations", "gpt-4.1-nano"),
@@ -185,6 +189,10 @@ def select_deep_thinking_agent(provider) -> str:
 
     # Define deep thinking llm engine options with their corresponding model names
     DEEP_AGENT_OPTIONS = {
+        "deepseek": [
+            ("DeepSeek Chat - Flagship general-purpose assistant", "deepseek-chat"),
+            ("DeepSeek Reasoner - Enhanced deliberate reasoning", "deepseek-reasoner"),
+        ],
         "openai": [
             ("GPT-4.1-nano - Ultra-lightweight model for basic operations", "gpt-4.1-nano"),
             ("GPT-4.1-mini - Compact model with good performance", "gpt-4.1-mini"),
@@ -240,9 +248,10 @@ def select_deep_thinking_agent(provider) -> str:
     return choice
 
 def select_llm_provider() -> tuple[str, str]:
-    """Select the OpenAI api url using interactive selection."""
-    # Define OpenAI api options with their corresponding endpoints
+    """Select the LLM provider URL using an interactive selection."""
+    # Define provider options with their corresponding endpoints
     BASE_URLS = [
+        ("DeepSeek", "https://api.deepseek.com/v1"),
         ("OpenAI", "https://api.openai.com/v1"),
         ("Anthropic", "https://api.anthropic.com/"),
         ("Google", "https://generativelanguage.googleapis.com/v1"),
@@ -267,7 +276,7 @@ def select_llm_provider() -> tuple[str, str]:
     ).ask()
     
     if choice is None:
-        console.print("\n[red]no OpenAI backend selected. Exiting...[/red]")
+        console.print("\n[red]No backend selected. Exiting...[/red]")
         exit(1)
     
     display_name, url = choice

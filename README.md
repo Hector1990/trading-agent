@@ -119,9 +119,9 @@ You will also need the FinnHub API for financial data. All of our code is implem
 export FINNHUB_API_KEY=$YOUR_FINNHUB_API_KEY
 ```
 
-You will need the OpenAI API for all the agents.
+You will need the DeepSeek API for all the agents.
 ```bash
-export OPENAI_API_KEY=$YOUR_OPENAI_API_KEY
+export DEEPSEEK_API_KEY=$YOUR_DEEPSEEK_API_KEY
 ```
 
 ### CLI Usage
@@ -150,7 +150,7 @@ An interface will appear showing results as they load, letting you track the age
 
 ### Implementation Details
 
-We built TradingAgents with LangGraph to ensure flexibility and modularity. We utilize `o1-preview` and `gpt-4o` as our deep thinking and fast thinking LLMs for our experiments. However, for testing purposes, we recommend you use `o4-mini` and `gpt-4.1-mini` to save on costs as our framework makes **lots of** API calls.
+We built TradingAgents with LangGraph to ensure flexibility and modularity. The default configuration now targets DeepSeek's `deepseek-chat` model for both the deep-thinking and quick-thinking agents so you can get strong reasoning at a predictable cost. You can still override the configuration to point at other providers or models if required.
 
 ### Python Usage
 

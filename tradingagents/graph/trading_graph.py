@@ -58,13 +58,34 @@ class TradingAgentsGraph:
         )
 
         # Initialize LLMs
-        if self.config["llm_provider"].lower() == "openai" or self.config["llm_provider"] == "ollama" or self.config["llm_provider"] == "openrouter":
-            self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
-        elif self.config["llm_provider"].lower() == "anthropic":
+        provider = self.config["llm_provider"].lower()
+        if provider == "deepseek":
+            api_key = os.getenv("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "DEEPSEEK_API_KEY environment variable is required when using the DeepSeek provider."
+                )
+            common_kwargs = {
+                "api_key": api_key,
+                "base_url": self.config["backend_url"],
+            }
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"], **common_kwargs
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"], **common_kwargs
+            )
+        elif provider in {"openai", "ollama", "openrouter"}:
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"], base_url=self.config["backend_url"]
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"], base_url=self.config["backend_url"]
+            )
+        elif provider == "anthropic":
             self.deep_thinking_llm = ChatAnthropic(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
             self.quick_thinking_llm = ChatAnthropic(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
-        elif self.config["llm_provider"].lower() == "google":
+        elif provider == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
             self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
         else:
@@ -125,7 +146,7 @@ class TradingAgentsGraph:
             "social": ToolNode(
                 [
                     # online tools
-                    self.toolkit.get_stock_news_openai,
+                    self.toolkit.get_stock_news_deepseek,
                     # offline tools
                     self.toolkit.get_reddit_stock_info,
                 ]
@@ -133,7 +154,7 @@ class TradingAgentsGraph:
             "news": ToolNode(
                 [
                     # online tools
-                    self.toolkit.get_global_news_openai,
+                    self.toolkit.get_global_news_deepseek,
                     self.toolkit.get_google_news,
                     # offline tools
                     self.toolkit.get_finnhub_news,
@@ -143,7 +164,7 @@ class TradingAgentsGraph:
             "fundamentals": ToolNode(
                 [
                     # online tools
-                    self.toolkit.get_fundamentals_openai,
+                    self.toolkit.get_fundamentals_deepseek,
                     # offline tools
                     self.toolkit.get_finnhub_company_insider_sentiment,
                     self.toolkit.get_finnhub_company_insider_transactions,

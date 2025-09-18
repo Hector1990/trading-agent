@@ -9,7 +9,6 @@ import functools
 import pandas as pd
 import os
 from dateutil.relativedelta import relativedelta
-from langchain_openai import ChatOpenAI
 import tradingagents.dataflows.interface as interface
 from tradingagents.default_config import DEFAULT_CONFIG
 from langchain_core.messages import HumanMessage
@@ -363,12 +362,12 @@ class Toolkit:
 
     @staticmethod
     @tool
-    def get_stock_news_openai(
+    def get_stock_news_deepseek(
         ticker: Annotated[str, "the company's ticker"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     ):
         """
-        Retrieve the latest news about a given stock by using OpenAI's news API.
+        Retrieve the latest news about a given stock by using DeepSeek's capabilities.
         Args:
             ticker (str): Ticker of a company. e.g. AAPL, TSM
             curr_date (str): Current date in yyyy-mm-dd format
@@ -376,35 +375,35 @@ class Toolkit:
             str: A formatted string containing the latest news about the company on the given date.
         """
 
-        openai_news_results = interface.get_stock_news_openai(ticker, curr_date)
+        deepseek_news_results = interface.get_stock_news_deepseek(ticker, curr_date)
 
-        return openai_news_results
+        return deepseek_news_results
 
     @staticmethod
     @tool
-    def get_global_news_openai(
+    def get_global_news_deepseek(
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     ):
         """
-        Retrieve the latest macroeconomics news on a given date using OpenAI's macroeconomics news API.
+        Retrieve the latest macroeconomic news summary for a given date using DeepSeek.
         Args:
             curr_date (str): Current date in yyyy-mm-dd format
         Returns:
             str: A formatted string containing the latest macroeconomic news on the given date.
         """
 
-        openai_news_results = interface.get_global_news_openai(curr_date)
+        deepseek_news_results = interface.get_global_news_deepseek(curr_date)
 
-        return openai_news_results
+        return deepseek_news_results
 
     @staticmethod
     @tool
-    def get_fundamentals_openai(
+    def get_fundamentals_deepseek(
         ticker: Annotated[str, "the company's ticker"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     ):
         """
-        Retrieve the latest fundamental information about a given stock on a given date by using OpenAI's news API.
+        Retrieve a fundamentals-focused summary for a given stock and date using DeepSeek's model.
         Args:
             ticker (str): Ticker of a company. e.g. AAPL, TSM
             curr_date (str): Current date in yyyy-mm-dd format
@@ -412,8 +411,8 @@ class Toolkit:
             str: A formatted string containing the latest fundamental information about the company on the given date.
         """
 
-        openai_fundamentals_results = interface.get_fundamentals_openai(
+        deepseek_fundamentals_results = interface.get_fundamentals_deepseek(
             ticker, curr_date
         )
 
-        return openai_fundamentals_results
+        return deepseek_fundamentals_results

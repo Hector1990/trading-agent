@@ -12,8 +12,18 @@ import os
 import pandas as pd
 from tqdm import tqdm
 import yfinance as yf
-from openai import OpenAI
+from deepseek.api import DeepSeekAPI
 from .config import get_config, set_config, DATA_DIR
+
+
+def _df_to_markdown(df: pd.DataFrame, **kwargs) -> str:
+    """Convert DataFrame to markdown safely without requiring tabulate."""
+
+    try:
+        return df.to_markdown(**kwargs)
+    except ImportError:
+        # Fall back to plain text table when tabulate isn't available
+        return df.to_string(index=kwargs.get("index", False))
 
 
 def get_finnhub_news(
@@ -701,107 +711,175 @@ def get_YFin_data(
 
     return filtered_data
 
+_DEEPSEEK_CLIENT: DeepSeekAPI | None = None
 
-def get_stock_news_openai(ticker, curr_date):
+
+def _get_deepseek_client() -> DeepSeekAPI:
+    """Return a cached DeepSeek client configured with the user's API key."""
+
+    global _DEEPSEEK_CLIENT
+    if _DEEPSEEK_CLIENT is None:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "DEEPSEEK_API_KEY environment variable is required for DeepSeek requests."
+            )
+        _DEEPSEEK_CLIENT = DeepSeekAPI(api_key=api_key)
+    return _DEEPSEEK_CLIENT
+
+
+def _compose_temporal_window(curr_date: str, lookback_days: int) -> tuple[str, str]:
+    end_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_dt = end_dt - relativedelta(days=lookback_days)
+    return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+
+
+def get_stock_news_deepseek(ticker, curr_date):
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
+    # Fall back to Google News aggregation due to DeepSeek web search API limitations
+    news_text = get_google_news(f"{ticker} stock", curr_date, 7)
+    if news_text:
+        return news_text
+    # If Google News has no data, return a graceful message
+    return f"No recent news found for {ticker} between {_compose_temporal_window(curr_date, 7)[0]} and {curr_date}."
 
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Social Media for {ticker} from 7 days before {curr_date} to {curr_date}? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+
+def get_global_news_deepseek(curr_date):
+    config = get_config()
+    client = _get_deepseek_client()
+    briefing = get_google_news("global macroeconomic market", curr_date, 7)
+    if briefing:
+        return briefing
+    return "No macroeconomic headlines retrieved for the requested window."
+
+
+def get_fundamentals_deepseek(ticker, curr_date):
+    config = get_config()
+    start_date, end_date = _compose_temporal_window(curr_date, 30)
+
+    yf_ticker = yf.Ticker(ticker)
+
+    def _safe_fetch(fetcher, *args, **kwargs):
+        try:
+            return fetcher(*args, **kwargs)
+        except FileNotFoundError:
+            return ""
+        except Exception as exc:  # pylint: disable=broad-except
+            return f"{fetcher.__name__} unavailable: {exc}"
+
+    income_stmt = yf_ticker.financials
+    balance_sheet_df = yf_ticker.balance_sheet
+    cashflow_df = yf_ticker.cashflow
+
+    def _format_df(df, title, max_rows=12):
+        if df is None or df.empty:
+            return ""
+        df = df.copy()
+        df = df.iloc[:, :1]
+        col_name = df.columns[0]
+        if hasattr(col_name, "strftime"):
+            col_label = col_name.strftime("%Y-%m-%d")
+        else:
+            col_label = str(col_name)
+        df.columns = [col_label]
+        df = df.reset_index().rename(columns={"index": "Metric"})
+        df = df.head(max_rows)
+        return f"\n### {title}\n" + _df_to_markdown(df, index=False)
+
+    def _latest_value(df, label):
+        if df is None or df.empty:
+            return None
+        col = df.columns[0]
+        try:
+            return df.loc[label, col]
+        except KeyError:
+            return None
+
+    def _format_currency(value):
+        if value is None or pd.isna(value):
+            return "N/A"
+        magnitude = abs(value)
+        if magnitude >= 1e12:
+            return f"${value/1e12:,.2f}T"
+        if magnitude >= 1e9:
+            return f"${value/1e9:,.2f}B"
+        if magnitude >= 1e6:
+            return f"${value/1e6:,.2f}M"
+        return f"${value:,.2f}"
+
+    summary_lines = [
+        "## Fundamentals Overview",
+        f"Reporting window: {start_date} to {end_date}",
+    ]
+
+    key_metrics = []
+    if income_stmt is not None and not income_stmt.empty:
+        revenue = _latest_value(income_stmt, "Total Revenue")
+        net_income = _latest_value(income_stmt, "Net Income")
+        gross_profit = _latest_value(income_stmt, "Gross Profit")
+        if revenue is not None:
+            key_metrics.append(("Total Revenue", _format_currency(revenue)))
+        if gross_profit is not None and revenue:
+            key_metrics.append(("Gross Profit", _format_currency(gross_profit)))
+            try:
+                gross_margin = gross_profit / revenue if revenue else None
+                if gross_margin is not None:
+                    key_metrics.append(("Gross Margin", f"{gross_margin*100:.1f}%"))
+            except ZeroDivisionError:
+                pass
+        if net_income is not None:
+            key_metrics.append(("Net Income", _format_currency(net_income)))
+
+    if cashflow_df is not None and not cashflow_df.empty:
+        operating_cf = _latest_value(
+            cashflow_df, "Total Cash From Operating Activities"
+        )
+        free_cf = _latest_value(cashflow_df, "Free Cash Flow")
+        if operating_cf is not None:
+            key_metrics.append(("Operating Cash Flow", _format_currency(operating_cf)))
+        if free_cf is not None:
+            key_metrics.append(("Free Cash Flow", _format_currency(free_cf)))
+
+    if key_metrics:
+        metrics_df = pd.DataFrame(key_metrics, columns=["Metric", "Latest Value"])
+        summary_lines.append("\n### Key Financial Metrics")
+        summary_lines.append(_df_to_markdown(metrics_df, index=False))
+    else:
+        summary_lines.append(
+            "\n### Key Financial Metrics\nNo recent financial metrics available from Yahoo Finance."
+        )
+
+    summary_lines.append(_format_df(balance_sheet_df, "Latest Balance Sheet"))
+    summary_lines.append(_format_df(income_stmt, "Income Statement Snapshot"))
+    summary_lines.append(_format_df(cashflow_df, "Cash Flow Statement Snapshot"))
+
+    balance_sheet = _safe_fetch(get_simfin_balance_sheet, ticker, "quarterly", curr_date)
+    cashflow = _safe_fetch(get_simfin_cashflow, ticker, "quarterly", curr_date)
+    income_stmt_offline = _safe_fetch(
+        get_simfin_income_statements, ticker, "quarterly", curr_date
+    )
+    insider_sentiment = _safe_fetch(
+        get_finnhub_company_insider_sentiment, ticker, curr_date, 30
+    )
+    insider_transactions = _safe_fetch(
+        get_finnhub_company_insider_transactions, ticker, curr_date, 30
     )
 
-    return response.output[1].content[0].text
+    if balance_sheet:
+        summary_lines.extend(["\n### Offline Balance Sheet Data", balance_sheet])
+    if income_stmt_offline:
+        summary_lines.extend(["\n### Offline Income Statement Data", income_stmt_offline])
+    if cashflow:
+        summary_lines.extend(["\n### Offline Cash Flow Data", cashflow])
+    if insider_sentiment:
+        summary_lines.extend(["\n### Insider Sentiment (30-day lookback)", insider_sentiment])
+    if insider_transactions:
+        summary_lines.extend(["\n### Insider Transactions (30-day lookback)", insider_transactions])
 
+    combined = [line for line in summary_lines if line]
+    if not combined:
+        combined.append(
+            "No fundamental datasets were available for the requested window."
+        )
 
-def get_global_news_openai(curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
-
-    return response.output[1].content[0].text
-
-
-def get_fundamentals_openai(ticker, curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"])
-
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Fundamental for discussions on {ticker} during of the month before {curr_date} to the month of {curr_date}. Make sure you only get the data posted during that period. List as a table, with PE/PS/Cash flow/ etc",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
-    )
-
-    return response.output[1].content[0].text
+    return "\n".join(combined)

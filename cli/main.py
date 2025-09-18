@@ -463,10 +463,10 @@ def get_user_selections():
     )
     selected_research_depth = select_research_depth()
 
-    # Step 5: OpenAI backend
+    # Step 5: Provider backend
     console.print(
         create_question_box(
-            "Step 5: OpenAI backend", "Select which service to talk to"
+            "Step 5: Provider backend", "Select which service to talk to"
         )
     )
     selected_llm_provider, backend_url = select_llm_provider()
