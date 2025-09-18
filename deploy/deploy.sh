@@ -61,6 +61,8 @@ SSH_OPTIONS=(
   -p "$REMOTE_PORT"
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=10
 )
 
 SCP_OPTIONS=(
@@ -68,6 +70,8 @@ SCP_OPTIONS=(
   -P "$REMOTE_PORT"
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=10
 )
 
 SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
