@@ -10,20 +10,56 @@ def create_market_analyst(llm, toolkit):
         ticker = state["company_of_interest"]
         company_name = state["company_of_interest"]
 
-        if toolkit.config["online_tools"]:
-            tools = [
-                toolkit.get_YFin_data_online,
-                toolkit.get_stockstats_indicators_report_online,
-            ]
+        market_type = toolkit.config.get("market", "us").lower()
+        online_preferred = toolkit.config.get("online_tools", True)
+
+        if market_type == "cn":
+            tools = [toolkit.get_akshare_market_data]
+            data_tool_name = "get_akshare_market_data"
+            if online_preferred:
+                tools.append(toolkit.get_stockstats_indicators_report_online)
+                indicator_tool_name = "get_stockstats_indicators_report_online"
+            else:
+                tools.append(toolkit.get_stockstats_indicators_report)
+                indicator_tool_name = "get_stockstats_indicators_report"
+            data_source_note = (
+                "Use `{}` to download A-share OHLCV data via AKShare (Eastmoney)."
+            ).format(data_tool_name)
         else:
-            tools = [
-                toolkit.get_YFin_data,
-                toolkit.get_stockstats_indicators_report,
-            ]
+            if online_preferred:
+                tools = [
+                    toolkit.get_YFin_data_online,
+                    toolkit.get_stockstats_indicators_report_online,
+                ]
+                data_tool_name = "get_YFin_data_online"
+                indicator_tool_name = "get_stockstats_indicators_report_online"
+            else:
+                tools = [
+                    toolkit.get_YFin_data,
+                    toolkit.get_stockstats_indicators_report,
+                ]
+                data_tool_name = "get_YFin_data"
+                indicator_tool_name = "get_stockstats_indicators_report"
+            data_source_note = (
+                "Use `{}` to download OHLCV data via Yahoo Finance."
+            ).format(data_tool_name)
+
+        indicator_note = (
+            f"Then call `{indicator_tool_name}` to compute technical indicators for the selected dates."
+            if indicator_tool_name
+            else ""
+        )
+        language_clause = (
+            "请全程使用中文撰写分析，保持结构清晰、术语准确，并结合数据给出有说服力的结论。"
+            if market_type == "cn"
+            else ""
+        )
+
+        guidance_parts = [part for part in [data_source_note, indicator_note, language_clause] if part]
+        guidance_text = " ".join(guidance_parts)
 
         system_message = (
-            """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
-
+            f"""You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:\n
 Moving Averages:
 - close_50_sma: 50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.
 - close_200_sma: 200 SMA: A long-term trend benchmark. Usage: Confirm overall market trend and identify golden/death cross setups. Tips: It reacts slowly; best for strategic trend confirmation rather than frequent trading entries.
@@ -46,7 +82,7 @@ Volatility Indicators:
 Volume-Based Indicators:
 - vwma: VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume data. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses.
 
-- Select indicators that provide diverse and complementary information. Avoid redundancy (e.g., do not select both rsi and stochrsi). Also briefly explain why they are suitable for the given market context. When you tool call, please use the exact name of the indicators provided above as they are defined parameters, otherwise your call will fail. Please make sure to call get_YFin_data first to retrieve the CSV that is needed to generate indicators. Write a very detailed and nuanced report of the trends you observe. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."""
+- Select indicators that provide diverse and complementary information. Avoid redundancy (e.g., do not select both rsi and stochrsi). Also briefly explain why they are suitable for the given market context. When you tool call, please use the exact name of the indicators provided above as they are defined parameters, otherwise your call will fail. {guidance_text} Write a very detailed and nuanced report of the trends you observe. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."""
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
         )
 

@@ -20,10 +20,19 @@ from rich import box
 from rich.align import Align
 from rich.rule import Rule
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
-from cli.models import AnalystType
-from cli.utils import *
+from cli.utils import (
+    select_market,
+    get_ticker,
+    get_analysis_date,
+    select_analysts,
+    select_research_depth,
+    select_llm_provider,
+    select_shallow_thinking_agent,
+    select_deep_thinking_agent,
+)
+import uvicorn
+
+from cli import users as user_commands
 
 console = Console()
 
@@ -32,6 +41,8 @@ app = typer.Typer(
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
     add_completion=True,  # Enable shell completion
 )
+
+app.add_typer(user_commands.app, name="users")
 
 
 # Create a deque to store recent messages with a maximum length
@@ -425,29 +436,43 @@ def get_user_selections():
             box_content += f"\n[dim]Default: {default}[/dim]"
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
-    # Step 1: Ticker symbol
+    # Step 1: Select market
     console.print(
         create_question_box(
-            "Step 1: Ticker Symbol", "Enter the ticker symbol to analyze", "SPY"
+            "Step 1: Market",
+            "选择需要分析的市场 (A股/美股)",
         )
     )
-    selected_ticker = get_ticker()
+    selected_market = select_market()
+    console.print(
+        f"[green]Selected market:[/green] {selected_market['label']}"
+    )
 
-    # Step 2: Analysis date
+    # Step 2: Ticker symbol
+    console.print(
+        create_question_box(
+            "Step 2: Ticker Symbol",
+            "Enter the ticker symbol to analyze",
+            selected_market.get("ticker_hint", "SPY"),
+        )
+    )
+    selected_ticker = get_ticker(selected_market)
+
+    # Step 3: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
     console.print(
         create_question_box(
-            "Step 2: Analysis Date",
+            "Step 3: Analysis Date",
             "Enter the analysis date (YYYY-MM-DD)",
             default_date,
         )
     )
     analysis_date = get_analysis_date()
 
-    # Step 3: Select analysts
+    # Step 4: Select analysts
     console.print(
         create_question_box(
-            "Step 3: Analysts Team", "Select your LLM analyst agents for the analysis"
+            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
         )
     )
     selected_analysts = select_analysts()
@@ -455,32 +480,34 @@ def get_user_selections():
         f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
     )
 
-    # Step 4: Research depth
+    # Step 5: Research depth
     console.print(
         create_question_box(
-            "Step 4: Research Depth", "Select your research depth level"
+            "Step 5: Research Depth", "Select your research depth level"
         )
     )
     selected_research_depth = select_research_depth()
 
-    # Step 5: Provider backend
+    # Step 6: Provider backend
     console.print(
         create_question_box(
-            "Step 5: Provider backend", "Select which service to talk to"
+            "Step 6: Provider backend", "Select which service to talk to"
         )
     )
     selected_llm_provider, backend_url = select_llm_provider()
     
-    # Step 6: Thinking agents
+    # Step 7: Thinking agents
     console.print(
         create_question_box(
-            "Step 6: Thinking Agents", "Select your thinking agents for analysis"
+            "Step 7: Thinking Agents", "Select your thinking agents for analysis"
         )
     )
     selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
     selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
 
     return {
+        "market": selected_market["value"],
+        "market_meta": selected_market,
         "ticker": selected_ticker,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
@@ -490,30 +517,6 @@ def get_user_selections():
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
     }
-
-
-def get_ticker():
-    """Get ticker symbol from user input."""
-    return typer.prompt("", default="SPY")
-
-
-def get_analysis_date():
-    """Get the analysis date from user input."""
-    while True:
-        date_str = typer.prompt(
-            "", default=datetime.datetime.now().strftime("%Y-%m-%d")
-        )
-        try:
-            # Validate date format and ensure it's not in the future
-            analysis_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-            if analysis_date.date() > datetime.datetime.now().date():
-                console.print("[red]Error: Analysis date cannot be in the future[/red]")
-                continue
-            return date_str
-        except ValueError:
-            console.print(
-                "[red]Error: Invalid date format. Please use YYYY-MM-DD[/red]"
-            )
 
 
 def display_complete_report(final_state):
@@ -732,17 +735,22 @@ def extract_content_string(content):
         return str(content)
 
 def run_analysis():
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.default_config import DEFAULT_CONFIG as DEFAULT_CONFIG_MODULE
+
     # First get all user selections
     selections = get_user_selections()
 
     # Create config with selected research depth
-    config = DEFAULT_CONFIG.copy()
+    config = DEFAULT_CONFIG_MODULE.copy()
     config["max_debate_rounds"] = selections["research_depth"]
     config["max_risk_discuss_rounds"] = selections["research_depth"]
     config["quick_think_llm"] = selections["shallow_thinker"]
     config["deep_think_llm"] = selections["deep_thinker"]
     config["backend_url"] = selections["backend_url"]
     config["llm_provider"] = selections["llm_provider"].lower()
+    config["market"] = selections["market"]
+    config["market_meta"] = selections["market_meta"]
 
     # Initialize the graph
     graph = TradingAgentsGraph(
@@ -804,6 +812,8 @@ def run_analysis():
         update_display(layout)
 
         # Add initial messages
+        market_label = selections["market_meta"].get("label", selections["market"].upper())
+        message_buffer.add_message("System", f"Selected market: {market_label}")
         message_buffer.add_message("System", f"Selected ticker: {selections['ticker']}")
         message_buffer.add_message(
             "System", f"Analysis date: {selections['analysis_date']}"
@@ -857,7 +867,7 @@ def run_analysis():
                     msg_type = "System"
 
                 # Add message to buffer
-                message_buffer.add_message(msg_type, content)                
+                message_buffer.add_message(msg_type, content)
 
                 # If it's a tool call, add it to tool calls
                 if hasattr(last_message, "tool_calls"):
@@ -1099,6 +1109,17 @@ def run_analysis():
 @app.command()
 def analyze():
     run_analysis()
+
+
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", help="Server host"),
+    port: int = typer.Option(8000, help="Server port"),
+    reload: bool = typer.Option(False, help="Enable auto-reload (development only)"),
+):
+    """Run the TradingAgents web interface."""
+
+    uvicorn.run("web.server:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

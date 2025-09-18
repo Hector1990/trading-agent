@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>任务 {{ job_id }} - TradingAgents Console</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="detail-page">
+    <nav class="top-nav">
+        <span class="brand">TradingAgents Console</span>
+        <div class="nav-right">
+            <span class="user-chip">👤 {{ user }}</span>
+            <a href="/logout" class="text-link">退出</a>
+        </div>
+    </nav>
+    <div class="detail-container" data-job-id="{{ job_id }}">
+        <header class="detail-header">
+            <div>
+                <a href="/" class="back-link">← 返回任务面板</a>
+                <h1>任务 {{ job_id }}</h1>
+                <p class="subtle" id="job-meta">加载中...</p>
+            </div>
+            <span class="badge" id="job-status">pending</span>
+        </header>
+
+        <section class="detail-card">
+            <h2>阶段进度</h2>
+            <ul class="stage-list" id="stage-list"></ul>
+        </section>
+
+        <section class="detail-card">
+            <h2>实时输出</h2>
+            <pre class="log-viewer" id="job-logs"></pre>
+        </section>
+
+        <section class="detail-card">
+            <h2>最终报告</h2>
+            <div id="final-report" class="report-content"></div>
+        </section>
+    </div>
+
+    <script>
+        const stageConfig = [
+            { key: 'market_report', label: '市场分析', patterns: [/Market Analyst/i, /市场分析完成/], reportKey: 'market_report' },
+            { key: 'sentiment_report', label: '社交情绪', patterns: [/Social Analyst/i, /情绪分析完成/], reportKey: 'sentiment_report' },
+            { key: 'news_report', label: '新闻洞察', patterns: [/News Analyst/i, /新闻分析完成/], reportKey: 'news_report' },
+            { key: 'fundamentals_report', label: '基本面研究', patterns: [/Fundamentals Analyst/i, /基本面分析完成/], reportKey: 'fundamentals_report' },
+            { key: 'investment_plan', label: '研究团队总结', patterns: [/Bull Analyst/i, /Bear Analyst/i, /Research Manager/i, /研究团队总结完成/], reportKey: 'investment_plan' },
+            { key: 'trader_investment_plan', label: '交易员执行', patterns: [/Trader/i, /交易员方案生成完成/], reportKey: 'trader_investment_plan' },
+            { key: 'final_trade_decision', label: '风险评估', patterns: [/Risky Analyst/i, /Neutral Analyst/i, /Safe Analyst/i, /Risk Manager/i, /Risk Judge/i, /Portfolio Manager/i, /风险评估完成/], reportKey: 'final_trade_decision' },
+        ];
+
+        const detailContainer = document.querySelector('.detail-container');
+        const jobId = detailContainer.dataset.jobId;
+        const stageList = document.getElementById('stage-list');
+        const logsView = document.getElementById('job-logs');
+        const statusBadge = document.getElementById('job-status');
+        const metaText = document.getElementById('job-meta');
+        const finalReport = document.getElementById('final-report');
+
+        const statusClass = (status) => ({
+            queued: 'badge-queued',
+            running: 'badge-running',
+            completed: 'badge-success',
+            failed: 'badge-failed'
+        })[status] || 'badge-queued';
+
+        const deriveStageStates = (lines, jobStatus, reports) => {
+            const indices = new Map();
+            lines.forEach((line, idx) => {
+                stageConfig.forEach(stage => {
+                    if (stage.patterns.some(pattern => pattern.test(line))) {
+                        indices.set(stage.key, idx);
+                    }
+                });
+            });
+
+            const stageStates = stageConfig.map(stage => ({
+                key: stage.key,
+                label: stage.label,
+                state: 'pending',
+                reportKey: stage.reportKey,
+            }));
+
+            if (jobStatus === 'queued') {
+                return stageStates;
+            }
+
+            if (jobStatus === 'failed') {
+                const lastStage = [...indices.entries()].sort((a, b) => a[1] - b[1]).pop();
+                stageStates.forEach(stage => {
+                    if (indices.has(stage.key)) {
+                        stage.state = 'done';
+                    }
+                });
+                if (lastStage) {
+                    const failedStage = stageStates.find(stage => stage.key === lastStage[0]);
+                    if (failedStage) failedStage.state = 'failed';
+                }
+                return stageStates;
+            }
+
+            stageStates.forEach(stage => {
+                if (reports && reports[stage.key]) {
+                    stage.state = 'done';
+                }
+            });
+
+            if (jobStatus === 'completed') {
+                stageStates.forEach(stage => {
+                    stage.state = 'done';
+                });
+                return stageStates;
+            }
+
+            const ordered = [...indices.entries()].sort((a, b) => a[1] - b[1]);
+            const activeKey = ordered.length ? ordered[ordered.length - 1][0] : null;
+
+            stageStates.forEach(stage => {
+                if (indices.has(stage.key)) {
+                    stage.state = 'done';
+                }
+            });
+            if (activeKey) {
+                const activeStage = stageStates.find(stage => stage.key === activeKey);
+                if (activeStage) activeStage.state = 'active';
+                let setActive = false;
+                for (const stage of stageStates) {
+                    if (stage.key === activeKey) {
+                        setActive = true;
+                    }
+                    if (!setActive && stage.state === 'pending') {
+                        stage.state = 'done';
+                    }
+                }
+            }
+
+            return stageStates;
+        };
+
+        const renderStages = (lines, status, reports) => {
+            const stages = deriveStageStates(lines, status, reports.raw);
+            stageList.innerHTML = '';
+            const stateText = {
+                pending: '待开始',
+                active: '进行中',
+                done: '已完成',
+                failed: '失败',
+            };
+            stages.forEach(stage => {
+                const li = document.createElement('li');
+                li.className = `stage stage-${stage.state}`;
+                const header = document.createElement('div');
+                header.className = 'stage-header';
+                header.innerHTML = `<span>${stage.label}</span><span class="stage-label">${stateText[stage.state] || ''}</span>`;
+                li.appendChild(header);
+
+                const reportHtml = reports.html?.[stage.reportKey];
+                const reportRaw = reports.raw?.[stage.reportKey];
+                if (reportHtml || reportRaw) {
+                    const details = document.createElement('details');
+                    details.open = stage.state === 'active';
+                    const summary = document.createElement('summary');
+                    summary.textContent = '查看报告';
+                    details.appendChild(summary);
+                    const content = document.createElement('div');
+                    content.className = 'report-content';
+                    if (reportHtml) {
+                        content.innerHTML = reportHtml;
+                    } else {
+                        const pre = document.createElement('pre');
+                        pre.textContent = reportRaw;
+                        content.appendChild(pre);
+                    }
+                    details.appendChild(content);
+                    li.appendChild(details);
+                }
+
+                stageList.appendChild(li);
+            });
+        };
+
+        const pollJob = async () => {
+            try {
+                const res = await fetch(`/api/jobs/${jobId}`);
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!res.ok) throw new Error('status fetch failed');
+                const job = await res.json();
+
+                statusBadge.textContent = job.status;
+                statusBadge.className = `badge ${statusClass(job.status)}`;
+                metaText.textContent = `创建：${new Date(job.created_at).toLocaleString()} | 更新：${new Date(job.updated_at).toLocaleString()}`;
+
+                if (job.reports_html?.final_trade_decision) {
+                    finalReport.innerHTML = job.reports_html.final_trade_decision;
+                } else if (job.reports?.final_trade_decision) {
+                    const pre = document.createElement('pre');
+                    pre.textContent = job.reports.final_trade_decision;
+                    finalReport.innerHTML = '';
+                    finalReport.appendChild(pre);
+                } else if (job.decision) {
+                    finalReport.textContent = job.decision;
+                } else {
+                    finalReport.textContent = '暂无终版报告';
+                }
+
+                const logRes = await fetch(`/api/jobs/${jobId}/logs?limit=300`, { cache: 'no-store' });
+                if (logRes.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (logRes.ok) {
+                    const payload = await logRes.json();
+                    const lines = payload.lines || [];
+                    logsView.textContent = lines.join('\n');
+                    logsView.scrollTop = logsView.scrollHeight;
+                    renderStages(lines, job.status, { html: job.reports_html || {}, raw: job.reports || {} });
+                }
+
+                if (!['completed', 'failed'].includes(job.status)) {
+                    setTimeout(pollJob, 4000);
+                }
+            } catch (err) {
+                metaText.textContent = '加载失败，请刷新重试。';
+                console.error(err);
+            }
+        };
+
+        pollJob();
+    </script>
+</body>
+</html>

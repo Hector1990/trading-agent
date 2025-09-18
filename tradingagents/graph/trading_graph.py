@@ -132,47 +132,60 @@ class TradingAgentsGraph:
 
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:
         """Create tool nodes for different data sources."""
+        market_type = self.config.get("market", "us").lower()
+        online_preferred = self.config.get("online_tools", True)
+
+        if market_type == "cn":
+            market_tools = [self.toolkit.get_akshare_market_data]
+            if online_preferred:
+                market_tools.append(self.toolkit.get_stockstats_indicators_report_online)
+            else:
+                market_tools.append(self.toolkit.get_stockstats_indicators_report)
+
+            social_tools = [self.toolkit.get_eastmoney_social_sentiment]
+            if online_preferred:
+                social_tools.append(self.toolkit.get_stock_news_deepseek)
+
+            news_tools = [self.toolkit.get_netease_stock_news]
+            if online_preferred:
+                news_tools.extend(
+                    [self.toolkit.get_global_news_deepseek, self.toolkit.get_google_news]
+                )
+
+            fundamental_tools = [self.toolkit.get_akshare_fundamental_report]
+            if online_preferred:
+                fundamental_tools.append(self.toolkit.get_fundamentals_deepseek)
+        else:
+            market_tools = [
+                self.toolkit.get_YFin_data_online,
+                self.toolkit.get_stockstats_indicators_report_online,
+                self.toolkit.get_YFin_data,
+                self.toolkit.get_stockstats_indicators_report,
+            ]
+            social_tools = [
+                self.toolkit.get_stock_news_deepseek,
+                self.toolkit.get_reddit_stock_info,
+            ]
+            news_tools = [
+                self.toolkit.get_global_news_deepseek,
+                self.toolkit.get_google_news,
+                self.toolkit.get_finnhub_news,
+                self.toolkit.get_reddit_news,
+            ]
+            fundamental_tools = [
+                self.toolkit.get_fundamentals_deepseek,
+                self.toolkit.get_finnhub_company_insider_sentiment,
+                self.toolkit.get_finnhub_company_insider_transactions,
+                self.toolkit.get_simfin_balance_sheet,
+                self.toolkit.get_simfin_cashflow,
+                self.toolkit.get_simfin_income_stmt,
+            ]
+
         return {
-            "market": ToolNode(
-                [
-                    # online tools
-                    self.toolkit.get_YFin_data_online,
-                    self.toolkit.get_stockstats_indicators_report_online,
-                    # offline tools
-                    self.toolkit.get_YFin_data,
-                    self.toolkit.get_stockstats_indicators_report,
-                ]
-            ),
-            "social": ToolNode(
-                [
-                    # online tools
-                    self.toolkit.get_stock_news_deepseek,
-                    # offline tools
-                    self.toolkit.get_reddit_stock_info,
-                ]
-            ),
-            "news": ToolNode(
-                [
-                    # online tools
-                    self.toolkit.get_global_news_deepseek,
-                    self.toolkit.get_google_news,
-                    # offline tools
-                    self.toolkit.get_finnhub_news,
-                    self.toolkit.get_reddit_news,
-                ]
-            ),
-            "fundamentals": ToolNode(
-                [
-                    # online tools
-                    self.toolkit.get_fundamentals_deepseek,
-                    # offline tools
-                    self.toolkit.get_finnhub_company_insider_sentiment,
-                    self.toolkit.get_finnhub_company_insider_transactions,
-                    self.toolkit.get_simfin_balance_sheet,
-                    self.toolkit.get_simfin_cashflow,
-                    self.toolkit.get_simfin_income_stmt,
-                ]
-            ),
+            "market": ToolNode(market_tools),
+            "social": ToolNode(social_tools),
+            "news": ToolNode(news_tools),
+            "fundamentals": ToolNode(fundamental_tools),
         }
 
     def propagate(self, company_name, trade_date):

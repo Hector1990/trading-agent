@@ -9,6 +9,8 @@ def create_fundamentals_analyst(llm, toolkit):
         ticker = state["company_of_interest"]
         company_name = state["company_of_interest"]
 
+        market_type = toolkit.config.get("market", "us").lower()
+
         if toolkit.config["online_tools"]:
             tools = [toolkit.get_fundamentals_deepseek]
         else:
@@ -20,9 +22,26 @@ def create_fundamentals_analyst(llm, toolkit):
                 toolkit.get_simfin_income_stmt,
             ]
 
+        if market_type == "cn":
+            tools = [toolkit.get_akshare_fundamental_report] + tools
+
+        language_clause = (
+            "请全程使用中文撰写基本面报告，覆盖财务状况、估值、风险提示及管理层动态，条理清晰并引用关键数据。"
+            if market_type == "cn"
+            else ""
+        )
+
+        akshare_guidance = (
+            "请首先调用 `get_akshare_fundamental_report` 获取目标股票的AKShare核心数据，再结合其他来源进行补充分析。"
+            if market_type == "cn"
+            else ""
+        )
+
         system_message = (
             "You are a researcher tasked with analyzing fundamental information over the past week about a company. Please write a comprehensive report of the company's fundamental information such as financial documents, company profile, basic company financials, company financial history, insider sentiment and insider transactions to gain a full view of the company's fundamental information to inform traders. Make sure to include as much detail as possible. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
-            + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read.",
+            + (f" {akshare_guidance}" if akshare_guidance else "")
+            + (f" {language_clause}" if language_clause else "")
+            + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
         )
 
         prompt = ChatPromptTemplate.from_messages(

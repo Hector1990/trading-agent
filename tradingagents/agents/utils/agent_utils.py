@@ -120,6 +120,31 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_eastmoney_social_sentiment(
+        symbol: Annotated[str, "A-share ticker symbol"],
+        lookback_days: Annotated[int, "Number of days for popularity trend"] = 14,
+        top_keywords: Annotated[int, "Number of hot topics to list"] = 10,
+    ) -> str:
+        """Retrieve Eastmoney Guba popularity metrics for A-share equities."""
+
+        sentiment_report = interface.get_eastmoney_social_sentiment(
+            symbol, lookback_days, top_keywords
+        )
+
+        return sentiment_report
+
+    @staticmethod
+    @tool
+    def get_netease_stock_news(
+        symbol: Annotated[str, "A-share ticker symbol"],
+        limit: Annotated[int, "Number of news entries to fetch"] = 12,
+    ) -> str:
+        """Retrieve NetEase Finance company news for an A-share."""
+
+        return interface.get_netease_stock_news(symbol, limit)
+
+    @staticmethod
+    @tool
     def get_YFin_data(
         symbol: Annotated[str, "ticker symbol of the company"],
         start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
@@ -162,6 +187,22 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_akshare_market_data(
+        symbol: Annotated[str, "A-share ticker symbol"],
+        start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
+        end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+        adjust: Annotated[str, "复权方式，可选 qfq/hfq/空"] = "qfq",
+    ) -> str:
+        """Retrieve A-share OHLCV data sourced from Eastmoney via AKShare."""
+
+        result_data = interface.get_akshare_market_data(
+            symbol, start_date, end_date, adjust
+        )
+
+        return result_data
+
+    @staticmethod
+    @tool
     def get_stockstats_indicators_report(
         symbol: Annotated[str, "ticker symbol of the company"],
         indicator: Annotated[
@@ -188,6 +229,15 @@ class Toolkit:
         )
 
         return result_stockstats
+
+    @staticmethod
+    @tool
+    def get_akshare_fundamental_report(
+        symbol: Annotated[str, "A-share ticker symbol"],
+    ) -> str:
+        """Retrieve AKShare-driven fundamental summary for an A-share."""
+
+        return interface.get_akshare_fundamental_report(symbol)
 
     @staticmethod
     @tool

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradingAgents Web Console</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+    <div class="page">
+        <nav class="top-nav">
+            <span class="brand">TradingAgents Console</span>
+            <div class="nav-right">
+                <span class="user-chip">👤 {{ user }}</span>
+                <a href="/logout" class="text-link">退出</a>
+            </div>
+        </nav>
+        <header class="hero">
+            <div class="hero-content">
+                <h1>TradingAgents Web Console</h1>
+                <p>以现代化金融科技体验驱动多智能体调研，快速生成行情、情绪、新闻与风险洞察。</p>
+            </div>
+        </header>
+
+        <main class="layout single">
+            <section class="card form-card">
+                <h2>发起调研任务</h2>
+                <form id="analysis-form" class="grid-form">
+                    <div class="field">
+                        <label for="market">目标市场</label>
+                        <div class="segmented">
+                            {% for option in market_options %}
+                            <label>
+                                <input type="radio" name="market" value="{{ option.value }}" {% if loop.first %}checked{% endif %}>
+                                <span>
+                                    <strong>{{ option.label }}</strong>
+                                    <small>{{ option.description }}</small>
+                                </span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="ticker">股票代码</label>
+                        <input id="ticker" name="ticker" type="text" placeholder="600519" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="analysis_date">分析日期</label>
+                        <input id="analysis_date" name="analysis_date" type="date" required />
+                    </div>
+
+                    <div class="field">
+                        <label>调研深度</label>
+                        <select id="research_depth" name="research_depth">
+                            {% for option in research_depth_options %}
+                            <option value="{{ option.value }}">{{ option.label }} — {{ option.description }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="llm_provider">模型提供商</label>
+                        <select id="llm_provider" name="llm_provider"></select>
+                        <p class="field-hint" id="llm-hint"></p>
+                    </div>
+
+                    <div class="field llm-field">
+                        <label for="shallow_thinker">快速思考模型</label>
+                        <select id="shallow_thinker" name="shallow_thinker"></select>
+                    </div>
+
+                    <div class="field llm-field">
+                        <label for="deep_thinker">深度思考模型</label>
+                        <select id="deep_thinker" name="deep_thinker"></select>
+                    </div>
+
+                    <div class="field">
+                        <label>分析团队</label>
+                        <div class="checkbox-grid">
+                            {% for option in analyst_options %}
+                            <label class="checkbox">
+                                <input type="checkbox" name="analysts" value="{{ option.value }}" checked />
+                                <span>{{ option.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="primary-btn">启动分析</button>
+                </form>
+            </section>
+            <section class="card history-card">
+                <div class="history-header">
+                    <h2>历史调研记录</h2>
+                    <button type="button" id="history-refresh" class="ghost-btn">刷新</button>
+                </div>
+                <p class="subtle">查看你近期提交的任务状态与结论。</p>
+                <div id="history-error" class="history-error" hidden></div>
+                <div id="history-empty" class="empty-state">加载中...</div>
+                <div id="history-list" class="jobs" hidden></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const llmOptions = {{ llm_options | tojson }};
+        const form = document.getElementById('analysis-form');
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(form);
+            const analysts = formData.getAll('analysts');
+            const payload = {
+                market: formData.get('market'),
+                ticker: formData.get('ticker'),
+                analysis_date: formData.get('analysis_date'),
+                research_depth: Number(formData.get('research_depth')),
+                analysts,
+            };
+
+            const providerValue = llmProviderSelect.value;
+            const providerMeta = llmOptions.find(opt => opt.value === providerValue && opt.enabled);
+            if (providerMeta) {
+                payload.llm_provider = providerMeta.value;
+                if (shallowSelect.value) {
+                    payload.shallow_thinker = shallowSelect.value;
+                }
+                if (deepSelect.value) {
+                    payload.deep_thinker = deepSelect.value;
+                }
+                if (providerMeta.backend_url) {
+                    payload.backend_url = providerMeta.backend_url;
+                }
+            }
+
+            const res = await fetch('/api/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.detail || '任务提交失败');
+                return;
+            }
+
+            const job = await res.json();
+            window.open(`/jobs/${job.id}`, '_blank');
+        });
+
+        // Prefill date field with today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('analysis_date').value = today;
+
+        const llmProviderSelect = document.getElementById('llm_provider');
+        const shallowSelect = document.getElementById('shallow_thinker');
+        const deepSelect = document.getElementById('deep_thinker');
+        const llmHint = document.getElementById('llm-hint');
+
+        const renderSelectOptions = (selectEl, items, { disabledText = '' } = {}) => {
+            selectEl.innerHTML = '';
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.value;
+                option.textContent = item.label;
+                if (item.disabled) {
+                    option.disabled = true;
+                    if (disabledText) {
+                        option.textContent += disabledText;
+                    }
+                }
+                selectEl.appendChild(option);
+            });
+        };
+
+        const refreshProviderOptions = () => {
+            const providerItems = llmOptions.map(option => ({
+                value: option.value,
+                label: option.enabled ? option.label : `${option.label}（缺少 API Key）`,
+                disabled: !option.enabled,
+            }));
+            renderSelectOptions(llmProviderSelect, providerItems);
+            llmProviderSelect.disabled = providerItems.length === 0 || providerItems.every(item => item.disabled);
+
+            const firstEnabled = llmOptions.find(option => option.enabled);
+            if (firstEnabled) {
+                llmProviderSelect.value = firstEnabled.value;
+            } else {
+                llmProviderSelect.selectedIndex = -1;
+            }
+            updateModelSelects();
+        };
+
+        const updateSelectWithModels = (selectEl, models) => {
+            renderSelectOptions(selectEl, models);
+            if (selectEl.options.length) {
+                selectEl.disabled = false;
+                const preferred = models.find(model => model.default);
+                selectEl.value = preferred ? preferred.value : selectEl.options[0].value;
+            } else {
+                selectEl.disabled = true;
+            }
+        };
+
+        const updateModelSelects = () => {
+            const provider = llmOptions.find(option => option.value === llmProviderSelect.value);
+            if (!provider || !provider.enabled) {
+                if (provider && provider.env_var) {
+                    llmHint.textContent = `缺少环境变量 ${provider.env_var}，请配置后刷新页面。`;
+                } else {
+                    llmHint.textContent = '请配置对应的 API Key 后再选择模型。';
+                }
+                shallowSelect.innerHTML = '';
+                deepSelect.innerHTML = '';
+                shallowSelect.disabled = true;
+                deepSelect.disabled = true;
+                return;
+            }
+
+            llmHint.textContent = provider.description || '';
+
+            updateSelectWithModels(shallowSelect, provider.quick_models || []);
+            updateSelectWithModels(deepSelect, provider.deep_models || []);
+        };
+
+        llmProviderSelect.addEventListener('change', updateModelSelects);
+        refreshProviderOptions();
+
+        const historyList = document.getElementById('history-list');
+        const historyEmpty = document.getElementById('history-empty');
+        const historyError = document.getElementById('history-error');
+        const historyRefresh = document.getElementById('history-refresh');
+
+        const statusClasses = {
+            queued: 'badge-queued',
+            running: 'badge-running',
+            completed: 'badge-success',
+            failed: 'badge-failed',
+        };
+
+        const formatTimestamp = (value) => {
+            if (!value) return '-';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString();
+        };
+
+        const renderHistoryCard = (item) => {
+            const card = document.createElement('div');
+            card.className = 'job-card';
+
+            const header = document.createElement('header');
+            const title = document.createElement('div');
+            title.innerHTML = `<strong>${item.ticker}</strong> · ${item.analysis_date}`;
+            const badge = document.createElement('span');
+            const badgeClass = statusClasses[item.status] || 'badge-queued';
+            badge.className = `badge ${badgeClass}`;
+            badge.textContent = item.status;
+            header.appendChild(title);
+            header.appendChild(badge);
+            card.appendChild(header);
+
+            const meta = document.createElement('div');
+            meta.className = 'history-meta';
+            meta.innerHTML = `
+                <span>创建：${formatTimestamp(item.created_at)}</span>
+                <span>更新：${formatTimestamp(item.updated_at)}</span>
+                ${item.completed_at ? `<span>完成：${formatTimestamp(item.completed_at)}</span>` : ''}
+            `;
+            card.appendChild(meta);
+
+            if (item.decision) {
+                const decision = document.createElement('p');
+                decision.className = 'history-decision';
+                decision.textContent = item.decision;
+                card.appendChild(decision);
+            }
+
+            if (item.error) {
+                const error = document.createElement('p');
+                error.className = 'history-error-text';
+                error.textContent = item.error;
+                card.appendChild(error);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'history-actions';
+            const detailLink = document.createElement('a');
+            detailLink.href = `/jobs/${item.job_id}`;
+            detailLink.target = '_blank';
+            detailLink.rel = 'noopener';
+            detailLink.className = 'text-link';
+            detailLink.textContent = '查看详情';
+            actions.appendChild(detailLink);
+            card.appendChild(actions);
+
+            return card;
+        };
+
+        const setHistoryState = ({ loading = false, error = null }) => {
+            if (loading) {
+                historyEmpty.textContent = '加载中...';
+                historyEmpty.hidden = false;
+                historyList.hidden = true;
+                historyError.hidden = true;
+                return;
+            }
+            if (error) {
+                historyError.textContent = error;
+                historyError.hidden = false;
+                historyEmpty.hidden = true;
+                historyList.hidden = true;
+                return;
+            }
+            historyError.hidden = true;
+        };
+
+        const loadHistory = async () => {
+            setHistoryState({ loading: true });
+            historyList.innerHTML = '';
+            try {
+                const res = await fetch('/api/history?limit=20', { cache: 'no-store' });
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!res.ok) throw new Error('历史记录拉取失败');
+                const items = await res.json();
+                if (!items.length) {
+                    historyEmpty.textContent = '暂无历史任务';
+                    historyEmpty.hidden = false;
+                    historyList.hidden = true;
+                    return;
+                }
+                historyList.hidden = false;
+                historyEmpty.hidden = true;
+                items.forEach(item => {
+                    historyList.appendChild(renderHistoryCard(item));
+                });
+            } catch (err) {
+                console.error(err);
+                setHistoryState({ error: '历史记录加载失败，请稍后重试。' });
+            }
+        };
+
+        historyRefresh.addEventListener('click', loadHistory);
+        loadHistory();
+    </script>
+</body>
+</html>

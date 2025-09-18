@@ -13,6 +13,7 @@ from .interface import (
     get_google_news,
     get_reddit_global_news,
     get_reddit_company_news,
+    get_netease_stock_news,
     # Financial statements functions
     get_simfin_balance_sheet,
     get_simfin_cashflow,
@@ -23,6 +24,9 @@ from .interface import (
     # Market data functions
     get_YFin_data_window,
     get_YFin_data,
+    get_akshare_market_data,
+    get_eastmoney_social_sentiment,
+    get_akshare_fundamental_report,
 )
 
 __all__ = [
@@ -33,6 +37,7 @@ __all__ = [
     "get_google_news",
     "get_reddit_global_news",
     "get_reddit_company_news",
+    "get_netease_stock_news",
     # Financial statements functions
     "get_simfin_balance_sheet",
     "get_simfin_cashflow",
@@ -43,4 +48,7 @@ __all__ = [
     # Market data functions
     "get_YFin_data_window",
     "get_YFin_data",
+    "get_akshare_market_data",
+    "get_eastmoney_social_sentiment",
+    "get_akshare_fundamental_report",
 ]

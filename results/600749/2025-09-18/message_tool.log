@@ -1,0 +1,94 @@
+[2025-09-18T09:32:02.354919Z] 任务已开始执行
+[2025-09-18T09:32:03.885138Z] 任务初始化完成，开始执行分析流程
+[2025-09-18T09:32:16.746073Z] 任务已开始执行
+[2025-09-18T09:32:16.747782Z] 任务初始化完成，开始执行分析流程
+[2025-09-18T09:32:23.776069Z] 任务执行失败: cannot schedule new futures after interpreter shutdown
+[2025-09-18T09:32:23.782950Z] Traceback (most recent call last):
+  File "/Users/hector/Code/TradingAgents/web/services/jobs.py", line 87, in _run_job
+    result = execute_analysis(job.selections, log_path=job.log_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/Code/TradingAgents/tradingagents/services/executor.py", line 166, in execute_analysis
+    for chunk in graph.graph.stream(init_state, **args):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/main.py", line 2647, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/_runner.py", line 162, in tick
+    run_with_retry(
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/_retry.py", line 42, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 657, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 401, in invoke
+    ret = self.func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/prebuilt/tool_node.py", line 368, in _func
+    *executor.map(self._run_one, tool_calls, input_types, config_list)
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 558, in map
+    return super().map(
+           ^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/concurrent/futures/_base.py", line 608, in map
+    fs = [self.submit(fn, *args) for args in zip(*iterables)]
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 530, in submit
+    return super().submit(
+           ^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/concurrent/futures/thread.py", line 173, in submit
+    raise RuntimeError('cannot schedule new futures after '
+RuntimeError: cannot schedule new futures after interpreter shutdown
+During task with name 'tools_market' and id '05e1b78f-0bee-7dec-3515-b8b4a6a304c1'
+
+[2025-09-18T09:32:27.908177Z] 任务执行失败: cannot schedule new futures after interpreter shutdown
+[2025-09-18T09:32:27.910950Z] Traceback (most recent call last):
+  File "/Users/hector/Code/TradingAgents/web/services/jobs.py", line 87, in _run_job
+    result = execute_analysis(job.selections, log_path=job.log_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/Code/TradingAgents/tradingagents/services/executor.py", line 166, in execute_analysis
+    for chunk in graph.graph.stream(init_state, **args):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/main.py", line 2647, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/_runner.py", line 162, in tick
+    run_with_retry(
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/pregel/_retry.py", line 42, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 657, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/_internal/_runnable.py", line 401, in invoke
+    ret = self.func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langgraph/prebuilt/tool_node.py", line 368, in _func
+    *executor.map(self._run_one, tool_calls, input_types, config_list)
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 558, in map
+    return super().map(
+           ^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/concurrent/futures/_base.py", line 608, in map
+    fs = [self.submit(fn, *args) for args in zip(*iterables)]
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/site-packages/langchain_core/runnables/config.py", line 530, in submit
+    return super().submit(
+           ^^^^^^^^^^^^^^^
+  File "/Users/hector/miniconda3/lib/python3.12/concurrent/futures/thread.py", line 173, in submit
+    raise RuntimeError('cannot schedule new futures after '
+RuntimeError: cannot schedule new futures after interpreter shutdown
+During task with name 'tools_market' and id 'd06aee1b-0b55-38df-6319-3440ec0025ae'
+
+[2025-09-18T09:38:44.200331Z] 任务已开始执行
+[2025-09-18T09:38:44.202209Z] 任务初始化完成，开始执行分析流程
+[2025-09-18T09:40:44.629213Z] 市场分析完成
+[2025-09-18T09:41:52.853976Z] 情绪分析完成
+[2025-09-18T09:42:50.670299Z] 新闻分析完成
+[2025-09-18T09:44:14.000372Z] 基本面分析完成
+[2025-09-18T09:48:08.889792Z] 研究团队总结完成
+[2025-09-18T09:48:29.470997Z] 交易员方案生成完成
+[2025-09-18T09:51:23.721960Z] 风险评估完成
+[2025-09-18T09:51:23.722806Z] 分析流程执行完毕，正在生成报告
+[2025-09-18T09:51:23.727441Z] 任务完成
+[2025-09-18T09:51:23.728074Z] 任务成功完成

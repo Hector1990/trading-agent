@@ -56,6 +56,13 @@ class GraphSetup:
         if len(selected_analysts) == 0:
             raise ValueError("Trading Agents Graph Setup Error: no analysts selected!")
 
+        market_type = self.toolkit.config.get("market", "us").lower()
+        language_instruction = (
+            "请使用中文撰写所有分析和决策内容，保持专业性、结构清晰，并确保关键信息准确。"
+            if market_type == "cn"
+            else ""
+        )
+
         # Create analyst nodes
         analyst_nodes = {}
         delete_nodes = {}
@@ -91,22 +98,30 @@ class GraphSetup:
 
         # Create researcher and manager nodes
         bull_researcher_node = create_bull_researcher(
-            self.quick_thinking_llm, self.bull_memory
+            self.quick_thinking_llm, self.bull_memory, language_instruction
         )
         bear_researcher_node = create_bear_researcher(
-            self.quick_thinking_llm, self.bear_memory
+            self.quick_thinking_llm, self.bear_memory, language_instruction
         )
         research_manager_node = create_research_manager(
-            self.deep_thinking_llm, self.invest_judge_memory
+            self.deep_thinking_llm, self.invest_judge_memory, language_instruction
         )
-        trader_node = create_trader(self.quick_thinking_llm, self.trader_memory)
+        trader_node = create_trader(
+            self.quick_thinking_llm, self.trader_memory, language_instruction
+        )
 
         # Create risk analysis nodes
-        risky_analyst = create_risky_debator(self.quick_thinking_llm)
-        neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
-        safe_analyst = create_safe_debator(self.quick_thinking_llm)
+        risky_analyst = create_risky_debator(
+            self.quick_thinking_llm, language_instruction
+        )
+        neutral_analyst = create_neutral_debator(
+            self.quick_thinking_llm, language_instruction
+        )
+        safe_analyst = create_safe_debator(
+            self.quick_thinking_llm, language_instruction
+        )
         risk_manager_node = create_risk_manager(
-            self.deep_thinking_llm, self.risk_manager_memory
+            self.deep_thinking_llm, self.risk_manager_memory, language_instruction
         )
 
         # Create workflow

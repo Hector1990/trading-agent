@@ -8,6 +8,8 @@ def create_news_analyst(llm, toolkit):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
 
+        market_type = toolkit.config.get("market", "us").lower()
+
         if toolkit.config["online_tools"]:
             tools = [toolkit.get_global_news_deepseek, toolkit.get_google_news]
         else:
@@ -17,8 +19,25 @@ def create_news_analyst(llm, toolkit):
                 toolkit.get_google_news,
             ]
 
+        if market_type == "cn":
+            tools = [toolkit.get_netease_stock_news] + tools
+
+        language_clause = (
+            "请使用中文撰写整篇新闻分析，重点聚焦宏观变量、行业动态与对标的公司的影响，确保结构清晰。"
+            if market_type == "cn"
+            else ""
+        )
+
+        news_guidance = (
+            "务必优先调用 `get_netease_stock_news` 获取目标股票的网易财经新闻，然后再综合其他宏观渠道。"
+            if market_type == "cn"
+            else ""
+        )
+
         system_message = (
             "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Look at news from EODHD, and finnhub to be comprehensive. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
+            + (f" {news_guidance}" if news_guidance else "")
+            + (f" {language_clause}" if language_clause else "")
             + """ Make sure to append a Makrdown table at the end of the report to organize key points in the report, organized and easy to read."""
         )
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 - TradingAgents Console</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <h1>登录 TradingAgents</h1>
+        <p class="subtle">请输入凭证以访问研究控制台。</p>
+        {% if show_creation_hint %}
+        <div class="info-banner">系统暂无用户，请先在命令行执行 <code>python cli/main.py create-user</code> 创建账号。</div>
+        {% endif %}
+        {% if error %}
+        <div class="error-banner">{{ error }}</div>
+        {% endif %}
+        <form method="post" class="login-form">
+            <label>用户名
+                <input type="text" name="username" required />
+            </label>
+            <label>密码
+                <input type="password" name="password" required />
+            </label>
+            <button type="submit" class="primary-btn">登录</button>
+        </form>
+    </div>
+</body>
+</html>

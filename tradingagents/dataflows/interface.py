@@ -1,9 +1,19 @@
-from typing import Annotated, Dict
+from typing import Annotated, Dict, Optional, List
 from .reddit_utils import fetch_top_from_category
 from .yfin_utils import *
 from .stockstats_utils import *
 from .googlenews_utils import *
 from .finnhub_utils import get_data_in_range
+from .akshare_utils import (
+    fetch_a_share_history,
+    fetch_eastmoney_social_datasets,
+    fetch_netease_stock_news,
+    fetch_sina_stock_news,
+    fetch_cninfo_announcements,
+    fetch_eastmoney_stock_news,
+    fetch_akshare_fundamental_snapshot,
+    normalize_cn_symbol,
+)
 from dateutil.relativedelta import relativedelta
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -521,6 +531,13 @@ def get_stock_stats_indicators_window(
     curr_date = datetime.strptime(curr_date, "%Y-%m-%d")
     before = curr_date - relativedelta(days=look_back_days)
 
+    fetch_symbol = symbol
+    if online:
+        try:
+            fetch_symbol = normalize_cn_symbol(symbol).yfinance
+        except Exception:
+            fetch_symbol = symbol
+
     if not online:
         # read from YFin data
         data = pd.read_csv(
@@ -537,7 +554,10 @@ def get_stock_stats_indicators_window(
             # only do the trading dates
             if curr_date.strftime("%Y-%m-%d") in dates_in_df.values:
                 indicator_value = get_stockstats_indicator(
-                    symbol, indicator, curr_date.strftime("%Y-%m-%d"), online
+                    fetch_symbol,
+                    indicator,
+                    curr_date.strftime("%Y-%m-%d"),
+                    online,
                 )
 
                 ind_string += f"{curr_date.strftime('%Y-%m-%d')}: {indicator_value}\n"
@@ -548,15 +568,22 @@ def get_stock_stats_indicators_window(
         ind_string = ""
         while curr_date >= before:
             indicator_value = get_stockstats_indicator(
-                symbol, indicator, curr_date.strftime("%Y-%m-%d"), online
+                fetch_symbol,
+                indicator,
+                curr_date.strftime("%Y-%m-%d"),
+                online,
             )
 
             ind_string += f"{curr_date.strftime('%Y-%m-%d')}: {indicator_value}\n"
 
             curr_date = curr_date - relativedelta(days=1)
 
+    symbol_display = symbol
+    if online and fetch_symbol != symbol:
+        symbol_display = f"{symbol} (resolved: {fetch_symbol})"
+
     result_str = (
-        f"## {indicator} values from {before.strftime('%Y-%m-%d')} to {end_date}:\n\n"
+        f"## {indicator} values for {symbol_display} from {before.strftime('%Y-%m-%d')} to {end_date}:\n\n"
         + ind_string
         + "\n\n"
         + best_ind_params.get(indicator, "No description available.")
@@ -578,8 +605,15 @@ def get_stockstats_indicator(
     curr_date = curr_date.strftime("%Y-%m-%d")
 
     try:
+        resolved_symbol = symbol
+        if online:
+            try:
+                resolved_symbol = normalize_cn_symbol(symbol).yfinance
+            except Exception:
+                resolved_symbol = symbol
+
         indicator_value = StockstatsUtils.get_stock_stats(
-            symbol,
+            resolved_symbol,
             indicator,
             curr_date,
             os.path.join(DATA_DIR, "market_data", "price_data"),
@@ -710,6 +744,330 @@ def get_YFin_data(
     filtered_data = filtered_data.reset_index(drop=True)
 
     return filtered_data
+
+
+def _format_adjust_label(adjust: str) -> str:
+    return {
+        "qfq": "前复权 / Forward Adjusted",
+        "hfq": "后复权 / Backward Adjusted",
+        "": "不复权 / Unadjusted",
+    }.get(adjust, adjust or "不复权 / Unadjusted")
+
+
+def get_akshare_market_data(
+    symbol: Annotated[str, "A-share ticker symbol"],
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+    adjust: Annotated[str, "复权方式，可选 qfq/hfq/空"] = "qfq",
+) -> str:
+    """Retrieve A-share OHLCV data from Eastmoney via AKShare."""
+
+    try:
+        normalized = normalize_cn_symbol(symbol)
+        df = fetch_a_share_history(symbol, start_date, end_date, adjust)
+    except Exception as exc:
+        return f"Failed to fetch A-share market data for {symbol}: {exc}"
+
+    if df.empty:
+        return (
+            f"No A-share market data found for {normalized.prefixed} between {start_date} and {end_date}."
+        )
+
+    df_to_show = df.copy()
+    df_to_show.rename(
+        columns={
+            "PctChange": "PctChange%",
+            "TurnoverRate": "TurnoverRate%",
+        },
+        inplace=True,
+    )
+
+    markdown = _df_to_markdown(df_to_show, index=False)
+    adjust_label = _format_adjust_label(adjust)
+
+    header = (
+        f"## A股日线行情 {normalized.prefixed} ({start_date} → {end_date})\n"
+        f"数据来源: 东方财富 / AKShare | 复权方式: {adjust_label}\n"
+        f"YFinance 对应代码: {normalized.yfinance}\n\n"
+    )
+
+    notes = (
+        "- `PctChange%` 与 `TurnoverRate%` 为百分比数值 (单位: %)。\n"
+        "- `Turnover` 单位为人民币元，`Volume` 单位为手 (股)。\n"
+    )
+
+    return header + markdown + "\n\n" + notes
+
+
+def get_eastmoney_social_sentiment(
+    symbol: Annotated[str, "A-share ticker symbol"],
+    lookback_days: Annotated[int, "Number of days of ranking trend to show"] = 14,
+    top_keywords: Annotated[int, "Number of top hot keywords to keep"] = 10,
+) -> str:
+    """Aggregate Eastmoney Guba popularity metrics for A-share securities."""
+
+    try:
+        normalized = normalize_cn_symbol(symbol)
+        datasets = fetch_eastmoney_social_datasets(symbol)
+    except Exception as exc:
+        return f"Failed to fetch Eastmoney social data for {symbol}: {exc}"
+
+    sections = []
+
+    latest_df = datasets.get("latest")
+    if isinstance(latest_df, pd.DataFrame) and not latest_df.empty:
+        latest_df = latest_df.rename(columns={"item": "Metric", "value": "Value"})
+        sections.append(
+            "### 最新人气概览 / Latest Popularity Snapshot\n"
+            + _df_to_markdown(latest_df, index=False)
+        )
+
+    trend_df = datasets.get("trend")
+    if isinstance(trend_df, pd.DataFrame) and not trend_df.empty:
+        trend_df = trend_df.rename(columns={"时间": "Date", "排名": "Ranking"})
+        trend_df["Date"] = pd.to_datetime(trend_df["Date"], errors="coerce").dt.strftime(
+            "%Y-%m-%d"
+        )
+        trend_tail = trend_df.sort_values("Date").tail(lookback_days)
+        sections.append(
+            f"### 人气排名趋势（最近{len(trend_tail)}日） / Popularity Ranking Trend\n"
+            + _df_to_markdown(trend_tail, index=False)
+        )
+
+    keywords_df = datasets.get("keywords")
+    if isinstance(keywords_df, pd.DataFrame) and not keywords_df.empty:
+        keywords_df = keywords_df.rename(
+            columns={
+                "时间": "Date",
+                "股票代码": "Symbol",
+                "概念名称": "Concept",
+                "概念代码": "ConceptCode",
+                "热度": "Heat",
+            }
+        )
+        keywords_df["Date"] = pd.to_datetime(
+            keywords_df["Date"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+        top_kw = (
+            keywords_df.sort_values("Heat", ascending=False)
+            .groupby("Concept", as_index=False)
+            .first()
+            .sort_values("Heat", ascending=False)
+            .head(top_keywords)
+        )
+        sections.append(
+            f"### 热门讨论主题（Top {len(top_kw)}） / Hot Discussion Topics\n"
+            + _df_to_markdown(top_kw[["Concept", "Heat", "Date"]], index=False)
+        )
+
+    related_df = datasets.get("related")
+    if isinstance(related_df, pd.DataFrame) and not related_df.empty:
+        related_df = related_df.rename(
+            columns={
+                "时间": "Date",
+                "股票代码": "Symbol",
+                "相关股票代码": "Peer",
+                "涨跌幅": "PeerChange%",
+            }
+        )
+        related_df["Date"] = pd.to_datetime(
+            related_df["Date"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+        related_tail = related_df.sort_values("Date", ascending=False).head(10)
+        sections.append(
+            "### 关注者同时讨论的股票 / Related Stocks in Discussions\n"
+            + _df_to_markdown(related_tail, index=False)
+        )
+
+    if not sections:
+        return (
+            f"No Eastmoney social data available for {normalized.prefixed}."
+        )
+
+    for error_key in [
+        "latest_error",
+        "trend_error",
+        "keywords_error",
+        "related_error",
+    ]:
+        if error_key in datasets:
+            error_df = datasets[error_key]
+            if isinstance(error_df, pd.DataFrame) and not error_df.empty:
+                error_msg = error_df.iloc[0, 0]
+                sections.append(
+                    f"⚠️ 数据获取异常 {error_key.replace('_error', '')}: {error_msg}"
+                )
+
+    header = (
+        f"## 东方财富股吧人气分析 {normalized.prefixed}\n"
+        f"数据涵盖最新排名、历史趋势、热门话题与关联个股。\n"
+        f"若需更精确的情绪打分，可进一步结合帖子文本做NLP分析。\n\n"
+    )
+
+    return header + "\n\n".join(sections)
+
+
+def get_netease_stock_news(
+    symbol: Annotated[str, "A-share ticker symbol"],
+    limit: Annotated[int, "Number of news entries to retrieve"] = 12,
+) -> str:
+    """Aggregate multiple CN media/announcement sources for A-share news."""
+
+    normalized = normalize_cn_symbol(symbol)
+    header = f"## 公司新闻追踪 {normalized.code}"
+
+    errors: List[str] = []
+    media_candidates: List[List[Dict[str, str]]] = []
+    announcements: List[Dict[str, str]] = []
+
+    for fetcher, name in [
+        (fetch_netease_stock_news, "网易财经"),
+        (fetch_sina_stock_news, "新浪财经"),
+        (fetch_eastmoney_stock_news, "东方财富"),
+    ]:
+        try:
+            items = fetcher(symbol, limit)
+            media_candidates.append(items)
+        except Exception as exc:
+            errors.append(f"{name}：{exc}")
+
+    try:
+        announcements = fetch_cninfo_announcements(symbol, limit=max(6, limit // 2))
+    except Exception as exc:
+        errors.append(f"巨潮资讯：{exc}")
+
+    media_items = []
+    seen = set()
+    for group in media_candidates:
+        for item in group or []:
+            title = (item.get("title") or "").strip()
+            url = (item.get("url") or "").strip()
+            if not title or not url:
+                continue
+            key = (title, url)
+            if key in seen:
+                continue
+            seen.add(key)
+            media_items.append(item)
+
+    def sort_key(item: Dict[str, str]):
+        value = (item.get("date") or "").strip()
+        for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M"):
+            try:
+                return datetime.strptime(value, fmt)
+            except Exception:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except Exception:
+            return datetime.min
+
+    media_items.sort(key=sort_key, reverse=True)
+    media_items = media_items[:limit]
+
+    lines = [header]
+
+    if media_items:
+        lines.append("## 媒体新闻")
+        for item in media_items:
+            date = item.get("date", "")
+            title = item.get("title", "")
+            url = item.get("url", "")
+            summary = item.get("summary", "")
+            meta = item.get("source", "")
+            detail_parts = [part for part in [summary, f"来源：{meta}" if meta else ""] if part]
+            detail = "；".join(detail_parts)
+            if date:
+                lines.append(f"- **{date}** [{title}]({url}){(' — ' + detail) if detail else ''}")
+            else:
+                lines.append(f"- [{title}]({url}){(' — ' + detail) if detail else ''}")
+    else:
+        lines.append("## 媒体新闻\n- 暂无可用媒体新闻")
+
+    if announcements:
+        announcements.sort(key=sort_key, reverse=True)
+        lines.append("")
+        lines.append("## 权威公告（巨潮资讯）")
+        for item in announcements:
+            date = item.get("date", "")
+            title = item.get("title", "")
+            url = item.get("url", "")
+            detail = item.get("summary", "")
+            if date:
+                lines.append(f"- **{date}** [{title}]({url}){(' — ' + detail) if detail else ''}")
+            else:
+                lines.append(f"- [{title}]({url}){(' — ' + detail) if detail else ''}")
+
+    if errors:
+        lines.append("")
+        lines.append("⚠️ 数据源异常")
+        lines.extend([f"- {msg}" for msg in errors])
+
+    return "\n".join(lines)
+
+
+def get_akshare_fundamental_report(
+    symbol: Annotated[str, "A-share ticker symbol"],
+) -> str:
+    """Compile an AKShare-based fundamental snapshot for an A-share."""
+
+    try:
+        snapshot = fetch_akshare_fundamental_snapshot(symbol)
+        normalized = normalize_cn_symbol(symbol)
+    except Exception as exc:
+        return f"未能获取 {symbol} 的AKShare基本面数据：{exc}"
+
+    sections: list[str] = [f"## AKShare基本面速览 {normalized.code}"]
+
+    valuation_tables = snapshot.get("valuations")
+    if isinstance(valuation_tables, dict) and valuation_tables:
+        valuation_rows = []
+        for metric, df in valuation_tables.items():
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                ordered = df.dropna(subset=["date"]).sort_values("date")
+                if ordered.empty:
+                    ordered = df.sort_values(df.columns[0])
+                if ordered.empty:
+                    continue
+                latest = ordered.iloc[-1]
+                valuation_rows.append(
+                    {
+                        "指标": metric,
+                        "观察日": str(latest.get("date", "")),
+                        "数值": latest.get("value", ""),
+                    }
+                )
+        if valuation_rows:
+            valuation_df = pd.DataFrame(valuation_rows)
+            sections.append("### 估值水平")
+            sections.append(_df_to_markdown(valuation_df, index=False))
+
+    abstract_df = snapshot.get("financial_abstract")
+    if isinstance(abstract_df, pd.DataFrame) and not abstract_df.empty:
+        key_sections = abstract_df[abstract_df["选项"].isin(["常用指标", "盈利能力", "成长能力"])]
+        if not key_sections.empty:
+            value_columns = list(key_sections.columns[:2])
+            value_columns.extend(list(key_sections.columns[-2:]))
+            distilled = key_sections[value_columns]
+            sections.append("### 核心财务指标（新浪财经）")
+            sections.append(_df_to_markdown(distilled, index=False))
+
+    indicator_df = snapshot.get("main_indicator")
+    if isinstance(indicator_df, pd.DataFrame) and not indicator_df.empty:
+        trimmed = indicator_df.head(10)
+        sections.append("### 东方财富主要指标（按报告期）")
+        sections.append(_df_to_markdown(trimmed, index=False))
+
+    share_df = snapshot.get("share_structure")
+    if isinstance(share_df, pd.DataFrame) and not share_df.empty:
+        latest_share = share_df.sort_values("变更日期").iloc[-1:]
+        sections.append("### 最新股本结构（东方财富）")
+        sections.append(_df_to_markdown(latest_share, index=False))
+
+    if len(sections) == 1:
+        sections.append("未能获取到可用的AKShare基本面数据，请稍后重试。")
+
+    return "\n\n".join(sections)
 
 _DEEPSEEK_CLIENT: DeepSeekAPI | None = None
 

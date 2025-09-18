@@ -1,7 +1,12 @@
 import questionary
-from typing import List, Optional, Tuple, Dict
+from typing import List, Dict
+
+from rich.console import Console
 
 from cli.models import AnalystType
+
+
+console = Console()
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -11,11 +16,76 @@ ANALYST_ORDER = [
 ]
 
 
-def get_ticker() -> str:
+MARKET_CHOICES: List[Dict[str, str]] = [
+    {
+        "label": "A股（中国大陆）",
+        "value": "cn",
+        "description": "使用AKShare获取沪深京市场行情，并结合东方财富股吧舆情数据",
+        "ticker_hint": "600519",
+        "timezone": "Asia/Shanghai",
+    },
+    {
+        "label": "美股（美国）",
+        "value": "us",
+        "description": "沿用现有Yahoo Finance数据与Reddit情绪分析",
+        "ticker_hint": "SPY",
+        "timezone": "America/New_York",
+    },
+]
+
+
+def select_market() -> Dict[str, str]:
+    """Allow the user to choose between A-share and US equity workflows."""
+
+    style = questionary.Style(
+        [
+            ("selected", "fg:cyan noinherit"),
+            ("highlighted", "fg:cyan noinherit"),
+            ("pointer", "fg:cyan noinherit"),
+        ]
+    )
+
+    choices = [
+        questionary.Choice(
+            title=f"{entry['label']} — {entry['description']}",
+            value=entry,
+        )
+        for entry in MARKET_CHOICES
+    ]
+
+    selection = questionary.select(
+        "选择需要分析的市场 / Select the market to analyze:",
+        choices=choices,
+        instruction="\n- 使用方向键切换\n- Enter确认",
+        style=style,
+    ).ask()
+
+    if not selection:
+        console.print("\n[red]未选择市场，程序退出 / No market selected. Exiting...[/red]")
+        exit(1)
+
+    return selection
+
+
+def get_ticker(market: Dict[str, str]) -> str:
     """Prompt the user to enter a ticker symbol."""
+    market_id = market.get("value", "us")
+    default_value = market.get("ticker_hint", "")
+
+    prompt_text = (
+        "输入需要分析的A股代码（可输入6位代码，或形如600519.SH）:"
+        if market_id == "cn"
+        else "Enter the ticker symbol to analyze:"
+    )
+
+    validation_message = (
+        "请输入有效的股票代码 / Please enter a valid ticker."
+    )
+
     ticker = questionary.text(
-        "Enter the ticker symbol to analyze:",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
+        prompt_text,
+        default=default_value,
+        validate=lambda x: len(x.strip()) > 0 or validation_message,
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -28,7 +98,12 @@ def get_ticker() -> str:
         console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
         exit(1)
 
-    return ticker.strip().upper()
+    ticker = ticker.strip()
+
+    if market_id == "us":
+        return ticker.upper()
+
+    return ticker
 
 
 def get_analysis_date() -> str:

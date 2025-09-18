@@ -2,7 +2,7 @@ import time
 import json
 
 
-def create_risk_manager(llm, memory):
+def create_risk_manager(llm, memory, language_instruction: str = ""):
     def risk_manager_node(state) -> dict:
 
         company_name = state["company_of_interest"]
@@ -42,6 +42,9 @@ Deliverables:
 ---
 
 Focus on actionable insights and continuous improvement. Build on past lessons, critically evaluate all perspectives, and ensure each decision advances better outcomes."""
+
+        if language_instruction:
+            prompt += f"\n\n{language_instruction}"
 
         response = llm.invoke(prompt)
 
