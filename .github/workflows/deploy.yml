@@ -1,0 +1,47 @@
+name: Deploy to Remote Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "DEPLOY_SSH_KEY secret is not set" >&2
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan 124.223.193.139 >> ~/.ssh/known_hosts
+
+      - name: Deploy application
+        env:
+          REMOTE_HOST: 124.223.193.139
+          REMOTE_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          SSH_KEY: /home/runner/.ssh/id_rsa
+          REMOTE_DIR: ${{ vars.DEPLOY_REMOTE_DIR }}
+        run: |
+          if [ -z "$REMOTE_USER" ]; then
+            echo "DEPLOY_SSH_USER secret is not set" >&2
+            exit 1
+          fi
+          # Default remote directory if repository variable is not provided
+          if [ -z "$REMOTE_DIR" ]; then
+            REMOTE_DIR="/opt/tradingagents"
+          fi
+          REMOTE_DIR="$REMOTE_DIR" REMOTE_USER="$REMOTE_USER" deploy/deploy.sh
