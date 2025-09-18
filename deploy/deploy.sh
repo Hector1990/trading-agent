@@ -1,37 +1,113 @@
 #!/usr/bin/env bash
+"""
+Deploy the repository to a remote host using Docker Compose.
+
+Intended to be executed from CI (e.g. GitHub Actions). The script requires the
+following environment variables:
+
+  REMOTE_HOST   Target host/IP (e.g. 124.223.193.139)
+  REMOTE_USER   SSH user on the remote host (e.g. ubuntu)
+  SSH_KEY       Path to a private key with access to the remote host
+
+Optional variables:
+
+  REMOTE_DIR        Target directory on the remote server (default: /opt/tradingagents)
+  REMOTE_PORT       SSH port (default: 22)
+  REMOTE_HEALTHCHECK URL curl'ed after deployment (default: http://localhost/health)
+  SKIP_BOOTSTRAP    Set to 1 to skip running deploy/remote_bootstrap.sh
+
+The script packages the repository, uploads it to the remote server, runs the
+bootstrap script (installs Docker & compose if needed), and then performs a
+`docker compose up -d` inside the target directory.
+"""
+
 set -euo pipefail
 
-REMOTE_HOST=${REMOTE_HOST:-"124.223.193.139"}
-REMOTE_USER=${REMOTE_USER:-"ubuntu"}
-SSH_KEY=${SSH_KEY:-"/Users/hector/Code/tencent/cursor.pem"}
-REMOTE_DIR=${REMOTE_DIR:-"/opt/tradingagents"}
+require_env() {
+  local name="$1"
+  if [[ -z "${!name:-}" ]]; then
+    echo "Environment variable $name is required" >&2
+    exit 1
+  fi
+}
 
-echo "[+] Packaging project..."
-PROJECT_ROOT=$(cd "$(dirname "$0")"/.. && pwd)
-cd "$PROJECT_ROOT"
+require_file() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "File not found: $path" >&2
+    exit 1
+  fi
+}
 
-TAR_FILE="tradingagents_$(date +%Y%m%d%H%M%S).tar.gz"
-tar --exclude-vcs -czf "$TAR_FILE" .
+require_env "REMOTE_HOST"
+require_env "REMOTE_USER"
+require_env "SSH_KEY"
 
-echo "[+] Uploading to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}"
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} "sudo mkdir -p ${REMOTE_DIR} && sudo chown -R \$USER:\$USER ${REMOTE_DIR}"
-scp -i "$SSH_KEY" -o StrictHostKeyChecking=no "$TAR_FILE" ${REMOTE_USER}@${REMOTE_HOST}:/tmp/
+require_file "$SSH_KEY"
 
-echo "[+] Bootstrapping remote docker..."
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} "bash -s" < deploy/remote_bootstrap.sh
+REMOTE_DIR=${REMOTE_DIR:-/opt/tradingagents}
+REMOTE_PORT=${REMOTE_PORT:-22}
+REMOTE_HEALTHCHECK=${REMOTE_HEALTHCHECK:-http://localhost/health}
+SKIP_BOOTSTRAP=${SKIP_BOOTSTRAP:-0}
 
-echo "[+] Unpacking and starting containers..."
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} bash -lc "\
-  set -euo pipefail; \
-  mkdir -p ${REMOTE_DIR}; \
-  tar -xzf /tmp/${TAR_FILE} -C ${REMOTE_DIR}; \
-  cd ${REMOTE_DIR}; \
-  cp -n .env.example .env || true; \
-  docker compose build --no-cache; \
-  docker compose up -d; \
-  docker compose ps; \
-  curl -fsS http://localhost/health || true \
-"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
-echo "[+] Deployed. Visit: http://${REMOTE_HOST}/"
+echo "[deploy] Packaging repository from $PROJECT_ROOT"
+ARCHIVE=$(mktemp -t tradingagents.XXXXXX.tar.gz)
+trap 'rm -f "$ARCHIVE"' EXIT
 
+(cd "$PROJECT_ROOT" && tar --exclude-vcs -czf "$ARCHIVE" .)
+ARCHIVE_NAME=$(basename "$ARCHIVE")
+
+SSH_OPTIONS=(
+  -i "$SSH_KEY"
+  -p "$REMOTE_PORT"
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+)
+
+SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
+
+echo "[deploy] Ensuring remote directory $REMOTE_DIR exists"
+ssh "${SSH_OPTIONS[@]}" "$SSH_TARGET" "sudo mkdir -p '$REMOTE_DIR' && sudo chown -R \$USER:\$USER '$REMOTE_DIR'"
+
+echo "[deploy] Uploading archive ($ARCHIVE_NAME)"
+scp "${SSH_OPTIONS[@]}" "$ARCHIVE" "$SSH_TARGET:/tmp/$ARCHIVE_NAME"
+
+if [[ "$SKIP_BOOTSTRAP" != "1" ]]; then
+  echo "[deploy] Running remote bootstrap"
+  ssh "${SSH_OPTIONS[@]}" "$SSH_TARGET" "bash -s" < "$SCRIPT_DIR/remote_bootstrap.sh"
+else
+  echo "[deploy] Skipping remote bootstrap"
+fi
+
+echo "[deploy] Extracting archive and starting containers"
+ssh "${SSH_OPTIONS[@]}" "$SSH_TARGET" \
+  REMOTE_DIR="$REMOTE_DIR" \
+  ARCHIVE_NAME="$ARCHIVE_NAME" \
+  REMOTE_HEALTHCHECK="$REMOTE_HEALTHCHECK" \
+  bash -s <<'REMOTE_CMDS'
+set -euo pipefail
+
+mkdir -p "$REMOTE_DIR"
+tar -xzf "/tmp/${ARCHIVE_NAME}" -C "$REMOTE_DIR"
+rm -f "/tmp/${ARCHIVE_NAME}"
+
+cd "$REMOTE_DIR"
+
+if [ -f .env.example ] && [ ! -f .env ]; then
+  cp .env.example .env
+fi
+
+docker compose pull || true
+docker compose build --pull
+docker compose up -d
+docker compose ps
+
+if [ -n "${REMOTE_HEALTHCHECK:-}" ]; then
+  curl -fsS "$REMOTE_HEALTHCHECK" || true
+fi
+REMOTE_CMDS
+
+echo "[deploy] Deployment finished."
