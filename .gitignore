@@ -9,3 +9,4 @@ eval_data/
 .env
 web_data.db
 results/BRK.B/2025-09-18/message_tool.log
+results/
