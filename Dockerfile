@@ -3,7 +3,10 @@ FROM python:3.10-slim
 # Avoid interactive prompts and set sensible defaults
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple \
+    PIP_TRUSTED_HOST=mirrors.cloud.tencent.com
 
 WORKDIR /app
 
@@ -41,5 +44,4 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localho
 
 # Start the FastAPI app
 CMD ["uvicorn", "web.server:app", "--host", "0.0.0.0", "--port", "8000"]
-
 
