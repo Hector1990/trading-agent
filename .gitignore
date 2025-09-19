@@ -7,3 +7,5 @@ eval_results/
 eval_data/
 *.egg-info/
 .env
+web_data.db
+results/BRK.B/2025-09-18/message_tool.log
