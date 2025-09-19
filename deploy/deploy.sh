@@ -95,6 +95,7 @@ ssh "${SSH_OPTIONS[@]}" "$SSH_TARGET" \
   ARCHIVE_NAME="$ARCHIVE_NAME" \
   REMOTE_HEALTHCHECK="$REMOTE_HEALTHCHECK" \
   DEEPSEEK_API_KEY_VALUE="$DEEPSEEK_API_KEY_VALUE" \
+  WEB_ADMIN_USERS_VALUE="${WEB_ADMIN_USERS_VALUE:-hector}" \
   bash -s <<'REMOTE_CMDS'
 set -euo pipefail
 
@@ -111,6 +112,12 @@ if grep -q '^DEEPSEEK_API_KEY=' .env; then
   sed -i.bak "s/^DEEPSEEK_API_KEY=.*/DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_VALUE}/" .env && rm -f .env.bak
 else
   echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY_VALUE}" >> .env
+fi
+
+if grep -q '^WEB_ADMIN_USERS=' .env; then
+  sed -i.bak "s/^WEB_ADMIN_USERS=.*/WEB_ADMIN_USERS=${WEB_ADMIN_USERS_VALUE}/" .env && rm -f .env.bak
+else
+  echo "WEB_ADMIN_USERS=${WEB_ADMIN_USERS_VALUE}" >> .env
 fi
 
 docker compose pull || true

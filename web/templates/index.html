@@ -11,6 +11,9 @@
         <nav class="top-nav">
             <span class="brand">TradingAgents Console</span>
             <div class="nav-right">
+                {% if is_admin %}
+                <a href="/metrics" class="text-link">监控面板</a>
+                {% endif %}
                 <span class="user-chip">👤 {{ user }}</span>
                 <a href="/logout" class="text-link">退出</a>
             </div>

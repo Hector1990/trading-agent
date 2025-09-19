@@ -7,16 +7,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
 import markdown
 from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from web.auth import login_user, logout_user, require_user
+from web.auth import is_admin, login_user, logout_user, require_admin, require_user
 from web.db import get_db, init_db
 from web.models import User, JobHistory
 from web.services.jobs import submit_job, get_job, list_jobs
@@ -334,6 +335,7 @@ async def index(request: Request):
         {
             "request": request,
             "user": user,
+            "is_admin": is_admin(user),
             "market_options": MARKET_OPTIONS,
             "analyst_options": ANALYST_OPTIONS,
             "research_depth_options": RESEARCH_DEPTH_OPTIONS,
@@ -358,6 +360,7 @@ async def job_detail(job_id: str, request: Request):
         {
             "request": request,
             "user": user,
+            "is_admin": is_admin(user),
             "job_id": job_id,
         },
     )
@@ -395,6 +398,40 @@ async def login_submit(
             "show_creation_hint": db.query(User).count() == 0,
         },
         status_code=401,
+    )
+
+
+@app.get("/metrics", response_class=HTMLResponse)
+async def metrics_dashboard(request: Request, db: Session = Depends(get_db)):
+    try:
+        user = require_admin(request)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return RedirectResponse(url="/login", status_code=302)
+        raise
+
+    job_count_expr = func.count(JobHistory.id)
+    rows = (
+        db.query(JobHistory.username, job_count_expr.label("job_count"))
+        .group_by(JobHistory.username)
+        .order_by(job_count_expr.desc())
+        .all()
+    )
+    metrics = [
+        {"username": username, "job_count": job_count}
+        for username, job_count in rows
+    ]
+    total_jobs = sum(item["job_count"] for item in metrics)
+
+    return TEMPLATES.TemplateResponse(
+        "metrics.html",
+        {
+            "request": request,
+            "user": user,
+            "metrics": metrics,
+            "total_jobs": total_jobs,
+            "user_count": len(metrics),
+        },
     )
 
 

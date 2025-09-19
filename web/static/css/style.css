@@ -607,6 +607,74 @@ select:disabled {
     font-size: 0.8rem;
 }
 
+.metrics-card {
+    width: min(960px, 100%);
+}
+
+.metrics-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.metric-block {
+    min-width: 180px;
+    padding: 1rem 1.25rem;
+    border-radius: 16px;
+    background: rgba(12, 18, 40, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.metric-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+}
+
+.metric-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent-secondary);
+}
+
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    background: rgba(7, 10, 26, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.metrics-table th,
+.metrics-table td {
+    padding: 0.85rem 1.1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.metrics-table thead th {
+    background: rgba(12, 18, 40, 0.8);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.metrics-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.metrics-table tbody tr:hover {
+    background: rgba(108, 243, 255, 0.08);
+}
+
 @media (max-width: 960px) {
     body {
         padding: 1.5rem;

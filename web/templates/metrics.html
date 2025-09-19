@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>监控面板 - TradingAgents Console</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+    <div class="page">
+        <nav class="top-nav">
+            <span class="brand">TradingAgents Console</span>
+            <div class="nav-right">
+                <a href="/" class="text-link">任务面板</a>
+                <span class="user-chip">👤 {{ user }}</span>
+                <a href="/logout" class="text-link">退出</a>
+            </div>
+        </nav>
+
+        <main class="layout single">
+            <section class="card metrics-card">
+                <h2>用户任务执行统计</h2>
+                <p class="subtle">展示每位用户提交的任务总次数，帮助了解系统负载与使用情况。</p>
+
+                <div class="metrics-summary">
+                    <div class="metric-block">
+                        <span class="metric-label">覆盖用户</span>
+                        <span class="metric-value">{{ user_count }}</span>
+                    </div>
+                    <div class="metric-block">
+                        <span class="metric-label">任务总数</span>
+                        <span class="metric-value">{{ total_jobs }}</span>
+                    </div>
+                </div>
+
+                {% if metrics %}
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>用户名</th>
+                            <th>任务次数</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in metrics %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ item.username }}</td>
+                            <td>{{ item.job_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">暂未记录任何任务。</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 """Authentication helpers with persistent users."""
 
-from typing import Optional
+import os
+from typing import Optional, Set
 
 from fastapi import HTTPException, Request, status
 from passlib.context import CryptContext
@@ -46,4 +47,20 @@ def require_user(request: Request) -> str:
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    return user
+
+
+def _admin_usernames() -> Set[str]:
+    raw = os.getenv("WEB_ADMIN_USERS", "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def is_admin(username: str) -> bool:
+    return username in _admin_usernames()
+
+
+def require_admin(request: Request) -> str:
+    user = require_user(request)
+    if not is_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return user
