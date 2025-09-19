@@ -35,3 +35,4 @@ sqlalchemy
 passlib[bcrypt]
 bcrypt==3.2.2
 pydantic-settings
+typer
