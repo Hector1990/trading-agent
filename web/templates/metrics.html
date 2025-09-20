@@ -12,6 +12,9 @@
             <span class="brand">TradingAgents Console</span>
             <div class="nav-right">
                 <a href="/" class="text-link">任务面板</a>
+                {% if is_admin %}
+                <a href="/admin/users" class="text-link">用户管理</a>
+                {% endif %}
                 <span class="user-chip">👤 {{ user }}</span>
                 <a href="/logout" class="text-link">退出</a>
             </div>

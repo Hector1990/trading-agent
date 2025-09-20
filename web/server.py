@@ -16,8 +16,9 @@ import markdown
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from urllib.parse import urlencode
 
-from web.auth import is_admin, login_user, logout_user, require_admin, require_user
+from web.auth import create_user, is_admin, login_user, logout_user, require_admin, require_user
 from web.db import get_db, init_db
 from web.models import User, JobHistory
 from web.services.jobs import submit_job, get_job, list_jobs
@@ -282,6 +283,32 @@ def get_current_user_api(request: Request) -> str:
     return require_user(request)
 
 
+def _render_admin_users(
+    request: Request,
+    db: Session,
+    current_user: str,
+    *,
+    message: Optional[str] = None,
+    error: Optional[str] = None,
+    form_data: Optional[Dict[str, Any]] = None,
+    status_code: int = status.HTTP_200_OK,
+) -> HTMLResponse:
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return TEMPLATES.TemplateResponse(
+        "admin_users.html",
+        {
+            "request": request,
+            "user": current_user,
+            "is_admin": True,
+            "users": users,
+            "message": message,
+            "error": error,
+            "form_data": form_data or {},
+        },
+        status_code=status_code,
+    )
+
+
 def _llm_option_map() -> Dict[str, Dict[str, Any]]:
     return {option["value"]: option for option in get_llm_options()}
 
@@ -428,11 +455,84 @@ async def metrics_dashboard(request: Request, db: Session = Depends(get_db)):
         {
             "request": request,
             "user": user,
+            "is_admin": True,
             "metrics": metrics,
             "total_jobs": total_jobs,
             "user_count": len(metrics),
         },
     )
+
+
+@app.get("/admin/users", response_class=HTMLResponse, name="admin_users_page")
+async def admin_users_page(request: Request, db: Session = Depends(get_db)):
+    try:
+        user = require_admin(request)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return RedirectResponse(url="/login", status_code=302)
+        raise
+
+    created_username = request.query_params.get("created")
+    message = None
+    if created_username:
+        message = f"用户 {created_username} 创建成功"
+
+    return _render_admin_users(request, db, user, message=message)
+
+
+@app.post("/admin/users", response_class=HTMLResponse)
+async def admin_users_create(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        user = require_admin(request)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return RedirectResponse(url="/login", status_code=302)
+        raise
+
+    username = username.strip()
+    form_data = {"username": username}
+
+    if not username:
+        return _render_admin_users(
+            request,
+            db,
+            user,
+            error="用户名不能为空",
+            form_data=form_data,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if password != confirm_password:
+        return _render_admin_users(
+            request,
+            db,
+            user,
+            error="两次输入的密码不一致",
+            form_data=form_data,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        create_user(db, username, password)
+    except ValueError as exc:
+        return _render_admin_users(
+            request,
+            db,
+            user,
+            error=str(exc),
+            form_data=form_data,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    redirect_url = str(request.url_for("admin_users_page"))
+    query = urlencode({"created": username})
+    return RedirectResponse(url=f"{redirect_url}?{query}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.get("/logout")

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>用户管理 - TradingAgents Console</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+    <div class="page">
+        <nav class="top-nav">
+            <span class="brand">TradingAgents Console</span>
+            <div class="nav-right">
+                <a href="/" class="text-link">任务面板</a>
+                <a href="/metrics" class="text-link">监控面板</a>
+                <span class="user-chip">👤 {{ user }}</span>
+                <a href="/logout" class="text-link">退出</a>
+            </div>
+        </nav>
+
+        <main class="layout single">
+            <section class="card">
+                <h2>创建新用户</h2>
+                <p class="subtle">管理员可以在此为系统添加新的登录账号。</p>
+
+                {% if error %}
+                <div class="error-banner">{{ error }}</div>
+                {% endif %}
+
+                {% if message %}
+                <div class="info-banner">{{ message }}</div>
+                {% endif %}
+
+                <form method="post" class="grid-form">
+                    <div class="field">
+                        <label for="username">用户名</label>
+                        <input id="username" name="username" type="text" value="{{ form_data.username | default('') }}" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="password">密码</label>
+                        <input id="password" name="password" type="password" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="confirm_password">确认密码</label>
+                        <input id="confirm_password" name="confirm_password" type="password" required />
+                    </div>
+
+                    <button type="submit" class="primary-btn">创建用户</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>现有用户</h2>
+                <p class="subtle">查看当前已注册的账号。</p>
+
+                {% if users %}
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>用户名</th>
+                            <th>创建时间 (UTC)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in users %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ item.username }}</td>
+                            <td>
+                                {% if item.created_at %}
+                                {{ item.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">当前尚未创建任何用户。</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>
